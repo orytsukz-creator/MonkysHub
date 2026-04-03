@@ -1,6 +1,3 @@
-getgenv().RHub = getgenv().RHub or {}
-
-
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -9,8 +6,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR"
 RRR.Parent = playerGui
-
-getgenv().RHub.Gui = RRR
 
     local Container = Instance.new("Frame")
     Container.Name = "Container"
