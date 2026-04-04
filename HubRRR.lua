@@ -2,6 +2,8 @@
 -- Version: 3.2
 
 -- Instances:
+getgenv().Menu = getgenv().Menu or {}
+local Menu = getgenv().Menu
 
 local RRR = Instance.new("ScreenGui")
 local Container = Instance.new("Frame")
@@ -70,6 +72,7 @@ local Minimize = Instance.new("ImageButton")
 
 RRR.Name = "RRR"
 RRR.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+Menu.Gui = RRR
 RRR.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 Container.Name = "Container"
@@ -643,3 +646,23 @@ Minimize.BorderSizePixel = 0
 Minimize.Position = UDim2.new(0.886378288, 0, 0.369766414, 0)
 Minimize.Size = UDim2.new(0.0947225988, 0, 0.25, 0)
 Minimize.Image = "rbxassetid://138567149317610"
+
+Menu.Main = Main
+Menu.Drag = Drag
+
+Menu.Buttons = {
+    PowerShot = PowerShot,
+    AutoSteal = AutoSteal,
+    AutoGoal = AutoGoal,
+    SpamTackle = SpamTackle,
+    Metavision = Metavision,
+    FakeFlow = FakeFlow,
+    NoStun = NoStun
+}
+
+Menu.Inputs = {
+    PowerValue = PowerValue,
+    KeySteal = KeySteal,
+    KeyAutoGoal = KeyAutoGoal,
+    KeyTackle = KeyTackle
+}
