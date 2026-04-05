@@ -15,7 +15,7 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- AUTO STEAL (TELEPORTE PARADO NA BOLA)
+-- AUTO STEAL (COM TP BACK)
 -- ==========================================
 local function executarAutoSteal()
     if not getgenv().ScriptAtivoRRR then return end
@@ -23,15 +23,21 @@ local function executarAutoSteal()
     local hrp = getHRP()
     if not ball or ball:GetAttribute("State") == player.Name then return end
 
+    -- SALVA A POSIÇÃO PARA VOLTAR DEPOIS (TP BACK)
+    local posOriginal = hrp.CFrame
     local pegou = false
+
     local con; con = ball:GetAttributeChangedSignal("State"):Connect(function()
         if ball:GetAttribute("State") == player.Name then 
             pegou = true 
             if con then con:Disconnect() end 
+            -- EXECUTA O TP BACK
+            task.wait(0.05)
+            hrp.CFrame = posOriginal
         end
     end)
 
-    -- Spam de Roubo
+    -- Spam de Tackle
     task.spawn(function()
         while getgenv().ScriptAtivoRRR and not pegou do
             Tackle:FireServer()
@@ -39,23 +45,24 @@ local function executarAutoSteal()
         end
     end)
 
-    -- Teleporte Estrito (Vai na posição exata da bola, sem adicionar velocidade)
+    -- Teleporte na bola (Sem Dash)
     local start = tick()
-    while getgenv().ScriptAtivoRRR and not pegou and (tick() - start < 3) do
-        -- Posição exata. Sem somar velocidade da bola (Ball.Position puro)
+    while getgenv().ScriptAtivoRRR and not pegou and (tick() - start < 2.5) do
+        -- Vai direto na bola (Ball.Position puro)
         hrp.CFrame = CFrame.new(ball.Position.X, ball.Position.Y + 2.1, ball.Position.Z)
         
-        -- Zera qualquer força que faria o boneco "dashar" ou deslizar
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        -- Zera velocidade para não "escorregar" ou dar dash
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
         
         task.wait()
     end
+    
     if con then con:Disconnect() end
 end
 
 -- ==========================================
--- POWER SHOT (M2 CORRIGIDO)
+-- POWER SHOT (M2)
 -- ==========================================
 local function dispararChuteForte()
     local configs = getgenv().RRR_Configs
@@ -108,7 +115,6 @@ task.spawn(function()
         player:SetAttribute("Metavision", c.States["Meta"])
         player:SetAttribute("Flow", c.States["Flow"])
         
-        -- SpamTackle/Speed se o botão da UI estiver ON
         if c.States["KeyTackle"] then
             local h = getChar():FindFirstChild("Humanoid")
             if h then h.WalkSpeed = 40 end
