@@ -30,6 +30,7 @@ local function getChar() return player.Character or player.CharacterAdded:Wait()
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
+-- TP SEGURO (LIMPA VELOCIDADE)
 local function tpSeguro(pos)
     local hrp = getHRP()
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -37,7 +38,7 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- AUTO STEAL REATIVO (INSTANT BACK-TP)
+-- AUTO STEAL COM ANTECIPAÇÃO (HITBOX FIX)
 -- ==========================================
 local function executarAutoSteal()
     local ball = getBall()
@@ -48,36 +49,44 @@ local function executarAutoSteal()
     local posicaoOriginal = hrp.CFrame 
     local pegouABola = false
     
-    -- Conexão temporária para detectar a posse INSTANTANEAMENTE
+    -- Listener instantâneo de posse
     local conexao
     conexao = ball:GetAttributeChangedSignal("State"):Connect(function()
-        local estado = ball:GetAttribute("State")
-        if estado == player.Name or estado == "UNTOUCHABLE" then
+        local s = ball:GetAttribute("State")
+        if s == player.Name or s == "UNTOUCHABLE" then
             pegouABola = true
-            conexao:Disconnect() -- Para de ouvir assim que conseguir
+            conexao:Disconnect()
         end
     end)
 
     Tackle:FireServer()
     local startTime = tick()
 
-    -- Loop de perseguição (TP BALL)
     while ball and ball.Parent and (tick() - startTime < 1.2) and not pegouABola do
-        tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-        task.wait(0.02) -- Frequência alta para não perder a bola
+        local velBola = ball.AssemblyLinearVelocity
+        local posAlvo = ball.Position + Vector3.new(0, 1.5, 0) -- Base: em cima da bola
+
+        -- Se a bola estiver se movendo (mais que 10 de velocidade)
+        if velBola.Magnitude > 10 then
+            -- Calcula a direção e joga o player 2.5 studs À FRENTE do movimento
+            local antecipacao = velBola.Unit * 2.5 
+            posAlvo = posAlvo + antecipacao
+        end
+        
+        tpSeguro(posAlvo)
+        task.wait(0.02)
     end
 
-    -- Garante que a conexão seja limpa se o tempo acabar
     if conexao then conexao:Disconnect() end
-
-    -- [TP BACK INSTANTÂNEO]
+    
+    -- TP BACK INSTANTÂNEO
     if pegouABola then 
         tpSeguro(posicaoOriginal) 
     end
 end
 
 -- ==========================================
--- CHUTES (FORTE E AUTO GOL)
+-- SISTEMA DE CHUTES (POWER SHOT 4x)
 -- ==========================================
 local function chuteForte()
     local hrp = getHRP()
@@ -104,7 +113,7 @@ local function chuteAutoGol()
 end
 
 -- ==========================================
--- LOGICA M2 / HOLD (4x REPETIÇÕES)
+-- INPUTS (M2, MOBILE, TECLADO)
 -- ==========================================
 local function M2Action(_, state)
     if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
@@ -129,7 +138,6 @@ end
 
 CAS:BindActionAtPriority("M2ChuteForte", M2Action, false, 3000, Enum.UserInputType.MouseButton2)
 
--- MOBILE / TECLADO BINDINGS
 ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then segurandoM2 = true tempoM2 = tick() end end)
 ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then M2Action(nil, Enum.UserInputState.End) end end)
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
@@ -154,7 +162,7 @@ UIS.InputBegan:Connect(function(input, gpe)
     if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then Tackle:FireServer() end
 end)
 
--- LOOP BUFFS & ATRIBUTOS
+-- LOOP BUFFS
 task.spawn(function()
     while true do
         local hum = getChar():FindFirstChild("Humanoid")
