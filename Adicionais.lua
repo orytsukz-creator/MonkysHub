@@ -103,10 +103,14 @@ local function executarAutoSteal()
     if not getgenv().ScriptAtivoRRR then return end
     local ball = getBall()
     local hrp = getHRP()
+    
+    -- Verifica se a bola existe e se já não é nossa
     if not ball or ball:GetAttribute("State") == player.Name then return end
 
     local pegouABola = false
     local conexao
+    
+    -- Detecta o momento exato que pegamos a bola para parar o TP
     conexao = ball:GetAttributeChangedSignal("State"):Connect(function()
         if ball:GetAttribute("State") == player.Name then
             pegouABola = true
@@ -114,8 +118,9 @@ local function executarAutoSteal()
         end
     end)
 
+    -- Spam de Tackle (Carrinho/Roubo)
     task.spawn(function()
-        for i = 1, 40 do
+        for i = 1, 60 do
             if not getgenv().ScriptAtivoRRR or pegouABola then break end
             Tackle:FireServer()
             task.wait(0.05)
@@ -123,12 +128,28 @@ local function executarAutoSteal()
     end)
 
     local startTime = tick()
-    while getgenv().ScriptAtivoRRR and not pegouABola and (tick() - startTime < 2.5) do
-        local posAlvo = ball.Position + (ball.AssemblyLinearVelocity * 0.15)
-        hrp.CFrame = CFrame.new(posAlvo - Vector3.new(0, 1.5, 0))
-        hrp.AssemblyLinearVelocity = ball.AssemblyLinearVelocity * 2.5
-        task.wait(0.02)
+    while getgenv().ScriptAtivoRRR and not pegouABola and (tick() - startTime < 3.0) do
+        -- Posição da bola com um leve ajuste para o seu pé (Y - 1.5)
+        -- Se a bola estiver muito baixa, mantemos uma altura mínima para não entrar no chão
+        local ballPos = ball.Position
+        local targetY = ballPos.Y - 1.2
+        
+        -- Trava o Y para não descer do chão do mapa (ajuste conforme a altura do seu campo)
+        if targetY < -25.5 then targetY = -25.2 end 
+
+        local finalPos = Vector3.new(ballPos.X, targetY, ballPos.Z)
+        
+        -- Se a bola estiver correndo, damos um "leash" (atraso menor) para não varar
+        if ball.AssemblyLinearVelocity.Magnitude > 10 then
+            finalPos = finalPos + (ball.AssemblyLinearVelocity * 0.05)
+        end
+
+        hrp.CFrame = CFrame.new(finalPos)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0) -- Evita que você saia voando por inércia
+        
+        task.wait(0.01)
     end
+    
     if conexao then conexao:Disconnect() end
 end
 
