@@ -30,7 +30,6 @@ local function getChar() return player.Character or player.CharacterAdded:Wait()
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
--- TP SEGURO (LIMPA VELOCIDADE)
 local function tpSeguro(pos)
     local hrp = getHRP()
     hrp.AssemblyLinearVelocity = Vector3.zero
@@ -38,7 +37,7 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- AUTO STEAL COM ANTECIPAÇÃO (HITBOX FIX)
+-- AUTO STEAL DINÂMICO + SPAM TACKLE (50x)
 -- ==========================================
 local function executarAutoSteal()
     local ball = getBall()
@@ -49,7 +48,7 @@ local function executarAutoSteal()
     local posicaoOriginal = hrp.CFrame 
     local pegouABola = false
     
-    -- Listener instantâneo de posse
+    -- Listener instantâneo
     local conexao
     conexao = ball:GetAttributeChangedSignal("State"):Connect(function()
         local s = ball:GetAttribute("State")
@@ -59,18 +58,27 @@ local function executarAutoSteal()
         end
     end)
 
-    Tackle:FireServer()
+    -- Loop de SPAM do Remote (Tackle) em paralelo (50 vezes em ~3s)
+    task.spawn(function()
+        for i = 1, 50 do
+            if pegouABola or not ball.Parent then break end
+            Tackle:FireServer()
+            task.wait(0.06) -- 50 * 0.06 = 3 segundos de spam
+        end
+    end)
+
     local startTime = tick()
 
-    while ball and ball.Parent and (tick() - startTime < 1.2) and not pegouABola do
+    -- Loop de Perseguição com TP Dinâmico
+    while ball and ball.Parent and (tick() - startTime < 3.0) and not pegouABola do
         local velBola = ball.AssemblyLinearVelocity
-        local posAlvo = ball.Position + Vector3.new(0, 1.5, 0) -- Base: em cima da bola
+        local speed = velBola.Magnitude
+        local posAlvo = ball.Position + Vector3.new(0, 1.8, 0)
 
-        -- Se a bola estiver se movendo (mais que 10 de velocidade)
-        if velBola.Magnitude > 10 then
-            -- Calcula a direção e joga o player 2.5 studs À FRENTE do movimento
-            local antecipacao = velBola.Unit * 4
-            posAlvo = posAlvo + antecipacao
+        -- Antecipação Dinâmica (Mínimo 0.5, Máximo 4 studs)
+        if speed > 5 then
+            local fator = math.clamp(speed / 45, 0.5, 4) 
+            posAlvo = posAlvo + (velBola.Unit * fator)
         end
         
         tpSeguro(posAlvo)
@@ -79,14 +87,13 @@ local function executarAutoSteal()
 
     if conexao then conexao:Disconnect() end
     
-    -- TP BACK INSTANTÂNEO
     if pegouABola then 
         tpSeguro(posicaoOriginal) 
     end
 end
 
 -- ==========================================
--- SISTEMA DE CHUTES (POWER SHOT 4x)
+-- SISTEMA DE CHUTES E PODERES (MANTIDO)
 -- ==========================================
 local function chuteForte()
     local hrp = getHRP()
@@ -112,9 +119,6 @@ local function chuteAutoGol()
     Shoot:FireServer(230, dir, dir, hrp.Position, true, true)
 end
 
--- ==========================================
--- INPUTS (M2, MOBILE, TECLADO)
--- ==========================================
 local function M2Action(_, state)
     if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
     if state == Enum.UserInputState.Begin then
@@ -138,6 +142,7 @@ end
 
 CAS:BindActionAtPriority("M2ChuteForte", M2Action, false, 3000, Enum.UserInputType.MouseButton2)
 
+-- BINDINGS
 ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then segurandoM2 = true tempoM2 = tick() end end)
 ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then M2Action(nil, Enum.UserInputState.End) end end)
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
