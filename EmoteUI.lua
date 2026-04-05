@@ -112,6 +112,7 @@ local function PlayEmote(id, exclusivo)
     local anim = Instance.new("Animation")
     anim.AnimationId = "rbxassetid://" .. id
     activeTrack = humanoid:LoadAnimation(anim)
+    humanoid.WalkSpeed = 40
     activeTrack:Play()
     activeId = id
     isExclusivo = exclusivo or false
