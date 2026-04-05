@@ -128,10 +128,10 @@ end
 local function stopScript()
     scriptAtivo = false
     CAS:UnbindAction("M2ChuteForte")
-    local rrrGui = CoreGui:FindFirstChild("RRR")
+    local rrrGui = CoreGui:FindFirstChild("RRR_Hub")
     if rrrGui then rrrGui:Destroy() end
     local hum = getChar():FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end
+    if hum then hum.WalkSpeed = 42 hum.JumpPower = 50 end
     player:SetAttribute("Flow", false)
     player:SetAttribute("Metavision", false)
 end
