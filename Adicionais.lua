@@ -158,7 +158,7 @@ UIS.InputBegan:Connect(function(input, gpe)
             task.wait(0.15)
             local posGol = (player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
             tpSeguro(posGol)
-            task.wait(0.5)
+            task.wait(0.55)
             executarChuteAutoGol()
         end)
     end
