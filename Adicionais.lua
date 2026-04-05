@@ -15,7 +15,7 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- AUTO STEAL (DASH > 10 VELOCIDADE)
+-- AUTO STEAL (DIRETO NA BOLA - SEM DASH)
 -- ==========================================
 local function executarAutoSteal()
     if not getgenv().ScriptAtivoRRR then return end
@@ -25,33 +25,29 @@ local function executarAutoSteal()
 
     local pegou = false
     local con; con = ball:GetAttributeChangedSignal("State"):Connect(function()
-        if ball:GetAttribute("State") == player.Name then pegou = true con:Disconnect() end
+        if ball:GetAttribute("State") == player.Name then 
+            pegou = true 
+            if con then con:Disconnect() end 
+        end
     end)
 
+    -- Spam de Tackle (Roubo)
     task.spawn(function()
-        for i = 1, 100 do
-            if not getgenv().ScriptAtivoRRR or pegou then break end
+        while getgenv().ScriptAtivoRRR and not pegou do
             Tackle:FireServer()
             task.wait(0.01)
         end
     end)
 
+    -- Teleporte Estável (Colado na bola)
     local start = tick()
     while getgenv().ScriptAtivoRRR and not pegou and (tick() - start < 3) do
-        local ballVel = ball.AssemblyLinearVelocity
-        local ballSpeed = ballVel.Magnitude
-        local targetPos = ball.Position
-
-        -- LÓGICA DO DASH: Só ativa se a bola estiver com movimento > 10
-        if ballSpeed > 10 then
-            -- Antecipa o movimento da bola para o Dash
-            targetPos = ball.Position + (ballVel * 0.12)
-        end
-
-        -- Teleporte Estável (Pé na bola, sem capotar)
-        hrp.Velocity = Vector3.zero
-        hrp.RotVelocity = Vector3.zero
-        hrp.CFrame = CFrame.new(targetPos.X, targetPos.Y + 2.2, targetPos.Z)
+        -- Vai exatamente na posição da bola (Y + 2.2 para ficar em pé)
+        hrp.CFrame = CFrame.new(ball.Position.X, ball.Position.Y + 2.2, ball.Position.Z)
+        
+        -- Trava física para não capotar ou sair voando
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
         
         task.wait()
     end
@@ -59,63 +55,93 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- POWER SHOT (M2)
+-- LÓGICA DO CHUTE (POWER SHOT)
 -- ==========================================
-local segurandoM2 = false
-local tempoM2 = 0
-
-local function dispararForte()
+local function dispararChuteForte()
     local configs = getgenv().RRR_Configs
-    local pwr = tonumber(configs.Keys["PowerValue"]) or 230
+    if not configs.States["PowerShotState"] then return end
+    
+    local forca = tonumber(configs.Keys["PowerValue"]) or 230
     local opt1 = configs.States["PowerOption1"] or false
     local opt2 = configs.States["PowerOption2"] or false
-    local dir = (camera.CFrame.LookVector * 1000 + Vector3.new(0, 0.15, 0)).Unit
+    
+    -- Direção baseada para onde a câmera aponta
+    local look = camera.CFrame.LookVector
+    local direcao = (look * 1000 + Vector3.new(0, 0.15, 0)).Unit
 
-    for i = 1, 4 do
-        Shoot:FireServer(pwr, dir, dir, getHRP().Position, opt1, opt2)
-        task.wait()
-    end
+    -- Dispara o remote de chute
+    Shoot:FireServer(forca, direcao, direcao, getHRP().Position, opt1, opt2)
 end
 
-CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
-    local configs = getgenv().RRR_Configs
-    if not getgenv().ScriptAtivoRRR or not configs.States["PowerShotState"] then 
-        return Enum.ContextActionResult.Pass 
-    end
+-- Bind do Mouse 2 (Segura e solta)
+local segurandoM2 = false
+local tempoInicio = 0
+
+CAS:BindActionAtPriority("ChuteM2", function(_, state)
+    if not getgenv().ScriptAtivoRRR then return Enum.ContextActionResult.Pass end
     
     if state == Enum.UserInputState.Begin then
         segurandoM2 = true
-        tempoM2 = tick()
+        tempoInicio = tick()
     elseif state == Enum.UserInputState.End and segurandoM2 then
         segurandoM2 = false
-        local hold = tonumber(configs.Keys["HoldValue"]) or 0.5
-        if (tick() - tempoM2) >= hold then
-            dispararForte()
+        local holdNecessario = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.5
+        
+        -- Só chuta se segurou pelo tempo definido na UI
+        if (tick() - tempoInicio) >= holdNecessario then
+            dispararChuteForte()
         end
     end
     return Enum.ContextActionResult.Pass
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
 -- ==========================================
--- INPUTS E LOOPS
+-- LOOP DE BUFFS E STATUS (OUTROS BOTÕES)
 -- ==========================================
-UIS.InputBegan:Connect(function(input, gpe)
-    if input.KeyCode == Enum.KeyCode.P then getgenv().ScriptAtivoRRR = false return end
-    if gpe or not getgenv().ScriptAtivoRRR then return end
-    
-    local c = getgenv().RRR_Configs
-    if c.States["KeySteal"] and input.KeyCode == Enum.KeyCode[c.Keys["KeySteal"]:upper()] then 
-        executarAutoSteal() 
+task.spawn(function()
+    while task.wait(0.3) do
+        if not getgenv().ScriptAtivoRRR then break end
+        local char = getChar()
+        local hum = char:FindFirstChild("Humanoid")
+        local configs = getgenv().RRR_Configs
+        
+        -- Spam Tackle (Se o botão estiver ON)
+        if configs.States["KeyTackle"] then
+            Tackle:FireServer()
+            if hum then 
+                hum.WalkSpeed = 40 
+                hum.JumpPower = 63
+            end
+        end
+
+        -- Atributos (Metavision / Flow)
+        player:SetAttribute("Metavision", configs.States["Meta"])
+        player:SetAttribute("Flow", configs.States["Flow"])
+        
+        -- Cancel Animation (Se configurado)
+        if configs.States["KeyCancelAnim"] then
+            -- Lógica simples de resetar animação se necessário
+        end
     end
 end)
 
-task.spawn(function()
-    while task.wait(0.5) do
-        if not getgenv().ScriptAtivoRRR then break end
-        local h = getChar():FindFirstChild("Humanoid")
-        local c = getgenv().RRR_Configs
-        if c.States["KeyTackle"] and h then h.WalkSpeed = 40 h.JumpPower = 63 end
-        player:SetAttribute("Flow", c.States["Flow"])
-        player:SetAttribute("Metavision", c.States["Meta"])
+-- ==========================================
+-- INPUTS DE TECLADO
+-- ==========================================
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe or not getgenv().ScriptAtivoRRR then return end
+    
+    local configs = getgenv().RRR_Configs
+    local teclaSteal = configs.Keys["KeySteal"]
+    
+    -- Auto Steal
+    if teclaSteal and teclaSteal ~= "" and input.KeyCode == Enum.KeyCode[teclaSteal:upper()] then
+        executarAutoSteal()
+    end
+    
+    -- Desativar Script (Tecla P)
+    if input.KeyCode == Enum.KeyCode.P then
+        getgenv().ScriptAtivoRRR = false
+        print("Script RRR Desativado")
     end
 end)
