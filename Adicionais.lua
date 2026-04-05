@@ -32,25 +32,25 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- FUNÇÃO SAFE TP (ESTÁVEL E SEM CAPOTAR)
+-- FUNÇÃO SAFE TP (ESTÁVEL / ANTI-CAPOTAR)
 -- ==========================================
 local function tpSeguro(alvoPos, olharPara)
     local hrp = getHRP()
-    -- Zera as forças para não sair voando ou capotar
+    
+    -- Zera forças físicas para evitar bugs de velocidade/rotação
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
     
     if olharPara then
-        -- Dá o TP fazendo o tronco olhar para o alvo (Ball)
+        -- TP olhando para o alvo (Ball), mantendo o eixo Y reto para não tombar
         hrp.CFrame = CFrame.new(alvoPos, Vector3.new(olharPara.X, alvoPos.Y, olharPara.Z))
     else
-        -- TP simples mantendo a rotação atual
         hrp.CFrame = typeof(alvoPos) == "CFrame" and alvoPos or CFrame.new(alvoPos)
     end
 end
 
 -- ==========================================
--- 1. CHUTE FORTE / POWER SHOT
+-- 1. CHUTE FORTE (MIRA NA CÂMERA)
 -- ==========================================
 local function chuteForte()
     local hrp = getHRP()
@@ -60,12 +60,13 @@ local function chuteForte()
 end
 
 -- ==========================================
--- 2. CHUTE AUTO GOL (NO PASSBTN)
+-- 2. CHUTE AUTO GOL (CÁLCULO DE TRAVE)
 -- ==========================================
 local function chuteAutoGol()
     local hrp = getHRP()
     local alvo1, alvo2 = (player.Team and player.Team.Name == "Red") and {TRAVE_BLUE_1, TRAVE_BLUE_2} or {TRAVE_RED_1, TRAVE_RED_2}
     local p1, p2 = alvo1[1], alvo1[2]
+    
     local centro = (p1 + p2) / 2
     local ladoGol = (p2 - p1).Unit
     local dot = (hrp.Position - centro):Dot(ladoGol)
@@ -74,6 +75,7 @@ local function chuteAutoGol()
     local delta = alvoFinal - hrp.Position
     local dist = delta.Magnitude
     local horizontal = Vector3.new(delta.X, 0, delta.Z).Unit
+
     local mult = 0.14 + (math.floor((dist - 60) / 20) * 0.01)
     local altura = dist * mult
     local dir = (horizontal + Vector3.new(0, altura / dist, 0)).Unit
@@ -82,7 +84,7 @@ local function chuteAutoGol()
 end
 
 -- ==========================================
--- 3. AUTO STEAL (TP DE FRENTE PARA A BOLA)
+-- 3. AUTO STEAL (TP DE FRENTE PRA BOLA)
 -- ==========================================
 local function executarAutoSteal()
     local ball = getBall()
@@ -94,12 +96,14 @@ local function executarAutoSteal()
     local startTime = tick()
     local sucesso = false
 
-    while ball and ball.Parent and (tick() - startTime < 1.2) do
-        if ball:GetAttribute("State") == "UNTOUCHABLE" then sucesso = true break end
-        
-        -- TP mantendo o tronco virado para a bola e 2 studs de altura para não bugar no chão
+    while ball and ball.Parent and (tick() - startTime < 1.0) do
+        if ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then 
+            sucesso = true 
+            break 
+        end
+        -- TP 2.5 studs acima da bola olhando pra ela
         tpSeguro(ball.Position + Vector3.new(0, 2.5, 0), ball.Position)
-        task.wait(0.03)
+        task.wait(0.04) 
     end
     
     if sucesso then 
@@ -109,21 +113,27 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- LÓGICA M2 / HOLD
+-- LÓGICA DO POWER SHOT (M2 / SHOOTBTN)
 -- ==========================================
 local function M2Action(_, state)
     if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
+
     if state == Enum.UserInputState.Begin then
-        segurandoM2 = true; tempoM2 = tick()
+        segurandoM2 = true
+        tempoM2 = tick()
     elseif state == Enum.UserInputState.End then
         if segurandoM2 then
             segurandoM2 = false
             local holdReq = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.47
+            
             if (tick() - tempoM2) >= holdReq then
                 if disparoPendente then return end
                 disparoPendente = true
                 task.delay(DELAY_DISPARO, function()
-                    for i = 1, 4 do chuteForte(); task.wait() end
+                    for i = 1, 4 do
+                        chuteForte()
+                        task.wait()
+                    end
                     disparoPendente = false
                 end)
             end
@@ -140,11 +150,17 @@ ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
 PassBtn.MouseButton1Click:Connect(chuteAutoGol)
 
--- INPUTS TECLADO
+-- ==========================================
+-- INPUTS TECLADO (STEAL, GOL, SPAM)
+-- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     local configs = getgenv().RRR_Configs
-    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then executarAutoSteal() end
+    
+    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then
+        executarAutoSteal()
+    end
+    
     if configs.States["KeyAutoGoal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyAutoGoal"]:upper()] then
         task.spawn(function()
             local ball = getBall()
@@ -157,19 +173,30 @@ UIS.InputBegan:Connect(function(input, gpe)
             chuteAutoGol()
         end)
     end
-    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then Tackle:FireServer() end
+
+    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then
+        Tackle:FireServer()
+    end
 end)
 
--- LOOP BUFFS
+-- ==========================================
+-- LOOPS (BUFFS E ATRIBUTOS)
+-- ==========================================
 task.spawn(function()
     while true do
         local hum = getChar():FindFirstChild("Humanoid")
         local configs = getgenv().RRR_Configs
+        
+        -- WalkSpeed e JumpPower se o Spam Tackle estiver ON
         if configs.States["KeyTackle"] and hum then
-            hum.WalkSpeed = 40; hum.JumpPower = 63
+            hum.WalkSpeed = 40
+            hum.JumpPower = 63
         end
+
         if configs.States["Flow"] then player:SetAttribute("Flow", true) end
         if configs.States["Meta"] then player:SetAttribute("Metavision", true) end
         task.wait(0.5)
     end
 end)
+
+print("RRR HUB: Sistema Adicional Completo e Estável!")
