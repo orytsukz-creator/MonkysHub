@@ -1,5 +1,5 @@
 getgenv().Menu = getgenv().Menu or {}
-getgenv().RRR_Configs = { States = {}, Keys = {} } -- TABELA PARA VOCÊ USAR NOS SEUS COMANDOS
+getgenv().RRR_Configs = { States = {}, Keys = {} } 
 local Menu = getgenv().Menu
 local HttpService = game:GetService("HttpService")
 local FILE_NAME = "RRR_Keybinds.json"
@@ -53,7 +53,6 @@ Title.Position = UDim2.new(0.05, 0, 0.2, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "R.R.R HUB"
 Title.TextColor3 = Color3.new(1, 1, 1)
-Title.Font = Enum.Font.Unknown
 Title.TextScaled = true
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -82,7 +81,7 @@ local function CreateTab(name)
     Scroller.Size = UDim2.new(1, 0, 1, 0)
     Scroller.BackgroundTransparency = 1
     Scroller.Visible = false
-    Scroller.ScrollBarThickness = 4
+    Scroller.ScrollBarThickness = 2
     Scroller.AutomaticCanvasSize = Enum.AutomaticSize.Y
     Instance.new("UIListLayout", Scroller).Padding = UDim.new(0, 5)
     Tabs[name] = Scroller
@@ -104,8 +103,8 @@ local MiscTab = CreateTab("Misc")
 local PlayerTab = CreateTab("Player")
 MiscTab.Visible = true
 
-local function AddCheat(parent, name, placeholder, saveId)
-    getgenv().RRR_Configs.States[saveId] = false -- Começa OFF
+local function AddCheat(parent, name, placeholder, saveId, type)
+    getgenv().RRR_Configs.States[saveId] = false
     getgenv().RRR_Configs.Keys[saveId] = Menu.SavedKeys[saveId] or ""
 
     local M = Instance.new("Frame", parent)
@@ -115,27 +114,41 @@ local function AddCheat(parent, name, placeholder, saveId)
     Instance.new("UICorner", M)
 
     local Lab = Instance.new("TextLabel", M)
-    Lab.Size = UDim2.new(0.3, 0, 1, 0)
+    Lab.Size = UDim2.new(0.35, 0, 1, 0)
     Lab.Text = name
     Lab.TextColor3 = Color3.new(1,1,1)
     Lab.BackgroundTransparency = 1
     Lab.TextScaled = true
 
-    local Box = Instance.new("TextBox", M)
-    Box.Size = UDim2.new(0.3, 0, 0.5, 0)
-    Box.Position = UDim2.new(0.35, 0, 0.25, 0)
-    Box.Text = Menu.SavedKeys[saveId] or ""
-    Box.PlaceholderText = placeholder
-    Box.TextColor3 = Color3.fromRGB(255, 0, 0)
-    Box.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    Instance.new("UICorner", Box)
+    local Box
+    if type ~= "ToggleOnly" then
+        Box = Instance.new("TextBox", M)
+        Box.Size = UDim2.new(0.25, 0, 0.5, 0)
+        Box.Position = UDim2.new(0.4, 0, 0.25, 0)
+        Box.Text = Menu.SavedKeys[saveId] or ""
+        Box.PlaceholderText = placeholder
+        Box.TextColor3 = Color3.fromRGB(255, 0, 0)
+        Box.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+        Instance.new("UICorner", Box)
 
-    Box:GetPropertyChangedSignal("Text"):Connect(function()
-        local txt = Box.Text:lower()
-        local prohibited = {"1","2","3","4","w","a","s","d"," "}
-        if #txt > 1 then Box.Text = txt:sub(1,1) end
-        for _, key in pairs(prohibited) do if txt:find(key) then Box.Text = "" end end
-    end)
+        Box:GetPropertyChangedSignal("Text"):Connect(function()
+            local txt = Box.Text
+            if type == "Keybind" then
+                if #txt > 1 then Box.Text = txt:sub(1,1) end
+                local prohibited = {"1","2","3","4","w","a","s","d"," "}
+                for _, k in pairs(prohibited) do if txt:lower():find(k) then Box.Text = "" end end
+            elseif type == "Number" then
+                Box.Text = txt:gsub("%D", "") -- Remove tudo que não for número
+                if #Box.Text > 3 then Box.Text = Box.Text:sub(1,3) end -- Máximo 3 dígitos
+            end
+        end)
+
+        Box.FocusLost:Connect(function()
+            Menu.SavedKeys[saveId] = Box.Text
+            getgenv().RRR_Configs.Keys[saveId] = Box.Text
+            SaveConfig()
+        end)
+    end
 
     local Btn = Instance.new("TextButton", M)
     Btn.Size = UDim2.new(0.2, 0, 0.5, 0)
@@ -149,22 +162,18 @@ local function AddCheat(parent, name, placeholder, saveId)
     Btn.MouseButton1Click:Connect(function()
         Btn.Text = (Btn.Text == "OFF") and "ON" or "OFF"
         Btn.BackgroundColor3 = (Btn.Text == "ON") and Color3.new(0, 0.6, 0) or Color3.fromRGB(229, 0, 4)
-        getgenv().RRR_Configs.States[saveId] = (Btn.Text == "ON") -- AQUI ENVIA O ESTADO
-    end)
-
-    Box.FocusLost:Connect(function()
-        Menu.SavedKeys[saveId] = Box.Text
-        getgenv().RRR_Configs.Keys[saveId] = Box.Text -- AQUI ENVIA A TECLA
-        SaveConfig()
+        getgenv().RRR_Configs.States[saveId] = (Btn.Text == "ON")
     end)
 end
 
-AddCheat(MiscTab, "PowerShot", "170-230", "PowerValue")
-AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal")
-AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal")
-AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle")
-AddCheat(PlayerTab, "Metavision", "OFF", "Meta")
-AddCheat(PlayerTab, "Fake Flow", "OFF", "Flow")
+-- CONFIGURAÇÃO DOS ITENS
+AddCheat(MiscTab, "PowerShot", "230", "PowerValue", "Number")
+AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal", "Keybind")
+AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal", "Keybind")
+AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle", "Keybind")
+
+AddCheat(PlayerTab, "Metavision", "", "Meta", "ToggleOnly")
+AddCheat(PlayerTab, "Fake Flow", "", "Flow", "ToggleOnly")
 
 local UIS = game:GetService("UserInputService")
 local player = game.Players.LocalPlayer
@@ -182,6 +191,7 @@ task.spawn(function()
     end
 end)
 
+-- Arrastar GUI
 local dragging, dragStart, startPos
 UpBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
