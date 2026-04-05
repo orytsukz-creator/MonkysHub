@@ -2,17 +2,17 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local CAS = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- CONFIGURAÇÃO DE STATUS
 local scriptAtivo = true
 
 -- REMOTES
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
--- DEFINIÇÕES DOS GOLS (MIRA ALEATÓRIA)
+-- DEFINIÇÕES DOS GOLS
 local GOL_AZUL = {
     TraveEsq = Vector3.new(-2202, -12, 1006),
     TraveDir = Vector3.new(-2203, -12, 1049)
@@ -22,7 +22,7 @@ local GOL_VERMELHO = {
     TraveDir = Vector3.new(-2908, -12, 1007)
 }
 
--- TPs DE POSICIONAMENTO
+-- TPs DE POSICIONAMENTO RESTAURADOS
 local GOAL_TP_RED = Vector3.new(-2848, -25, 1030)
 local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
 
@@ -38,28 +38,26 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- AUTO GOL (MIRA CALIBRADA: GAVETA)
+-- AUTO GOL (DIREÇÃO E ALTURA CALIBRADAS)
 -- ==========================================
 local function executarChuteAutoGol()
     if not scriptAtivo then return end
     local hrp = getHRP()
     local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
     
-    -- Sorteia o canto (evita o meio onde o GK fica)
+    -- Mira nos cantos (20% das extremidades)
     local sorteioLado = math.random(1, 2)
-    local offsetZ = (sorteioLado == 1) and (math.random(0, 25)/100) or (math.random(75, 100)/100)
+    local offsetZ = (sorteioLado == 1) and (math.random(0, 20)/100) or (math.random(80, 100)/100)
     
-    -- Ponto horizontal entre as traves
     local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
     
-    -- AJUSTE DE ALTURA: -16 a -12 é a altura ideal da trave para não isolar
-    local alturaGaveta = math.random(-16, -13)
-    local alvoFinal = Vector3.new(pontoBase.X, alturaGaveta, pontoBase.Z)
+    -- Alvo vertical: -14 é uma altura segura para entrar no alto sem isolar
+    local alvoFinal = Vector3.new(pontoBase.X, -14, pontoBase.Z)
 
     local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
     
-    -- Direção com leve curva para cima, mas controlada
-    local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.08, 0)
+    -- Ajuste fino de Y: 0.05 para uma subida leve e veloz
+    local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.05, 0)
 
     for i = 1, 4 do
         if not scriptAtivo then break end
@@ -69,7 +67,7 @@ local function executarChuteAutoGol()
 end
 
 -- ==========================================
--- AUTO STEAL (3x IMPULSO + INTERCEPTAÇÃO)
+-- AUTO STEAL (IMPULSO 3x + INTERCEPTAÇÃO)
 -- ==========================================
 local function executarAutoSteal()
     if not scriptAtivo then return end
@@ -124,18 +122,15 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- FUNÇÃO DE PARADA (TECLA P)
+-- FUNÇÃO DE PARADA (TECLA P) - DELETA RRR
 -- ==========================================
 local function stopScript()
     scriptAtivo = false
     CAS:UnbindAction("M2ChuteForte")
     
-    -- Busca profunda para deletar a Interface
-    for _, v in pairs(player.PlayerGui:GetChildren()) do
-        if v:IsA("ScreenGui") and (v.Name:find("Monkys") or v:FindFirstChild("Main") or v:FindFirstChild("Frame")) then
-            v:Destroy()
-        end
-    end
+    -- Deleta a interface RRR do CoreGui
+    local rrrGui = CoreGui:FindFirstChild("RRR")
+    if rrrGui then rrrGui:Destroy() end
     
     -- Reset Humanoide
     local hum = getChar():FindFirstChild("Humanoid")
@@ -155,7 +150,6 @@ end
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     
-    -- Tecla de Emergência P
     if input.KeyCode == Enum.KeyCode.P then
         stopScript()
         return
