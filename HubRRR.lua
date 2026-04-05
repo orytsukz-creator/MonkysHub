@@ -199,7 +199,7 @@ task.spawn(function()
     if FlowButton then
         local holdTime = 0
         FlowButton.MouseButton1Down:Connect(function() holdTime = tick() end)
-        FlowButton.MouseButton1Up:Connect(function() if tick() - holdTime >= 3 then Drag.Visible = true end end)
+        FlowButton.MouseButton1Up:Connect(function() if tick() - holdTime >= 1.5 then Drag.Visible = true end end)
     end
 end)
 
