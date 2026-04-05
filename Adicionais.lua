@@ -9,9 +9,7 @@ local camera = workspace.CurrentCamera
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
--- ==========================================
--- POSIÇÕES DOS GOLS (PARA A MIRA)
--- ==========================================
+-- POSIÇÕES DOS GOLS
 local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
 local TRAVE_BLUE_1, TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1010), Vector3.new(-2202, -25, 1047)
 local GOAL_TP_RED, GOAL_TP_BLUE = Vector3.new(-2848, -25, 1030), Vector3.new(-2261, -25, 1030)
@@ -34,7 +32,25 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- 1. FUNÇÃO CHUTE FORTE (MIRA NA CÂMERA)
+-- FUNÇÃO SAFE TP (ESTÁVEL E SEM CAPOTAR)
+-- ==========================================
+local function tpSeguro(alvoPos, olharPara)
+    local hrp = getHRP()
+    -- Zera as forças para não sair voando ou capotar
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    
+    if olharPara then
+        -- Dá o TP fazendo o tronco olhar para o alvo (Ball)
+        hrp.CFrame = CFrame.new(alvoPos, Vector3.new(olharPara.X, alvoPos.Y, olharPara.Z))
+    else
+        -- TP simples mantendo a rotação atual
+        hrp.CFrame = typeof(alvoPos) == "CFrame" and alvoPos or CFrame.new(alvoPos)
+    end
+end
+
+-- ==========================================
+-- 1. CHUTE FORTE / POWER SHOT
 -- ==========================================
 local function chuteForte()
     local hrp = getHRP()
@@ -44,13 +60,12 @@ local function chuteForte()
 end
 
 -- ==========================================
--- 2. FUNÇÃO CHUTE AUTO GOL (MIRA NO GOL)
+-- 2. CHUTE AUTO GOL (NO PASSBTN)
 -- ==========================================
 local function chuteAutoGol()
     local hrp = getHRP()
     local alvo1, alvo2 = (player.Team and player.Team.Name == "Red") and {TRAVE_BLUE_1, TRAVE_BLUE_2} or {TRAVE_RED_1, TRAVE_RED_2}
     local p1, p2 = alvo1[1], alvo1[2]
-    
     local centro = (p1 + p2) / 2
     local ladoGol = (p2 - p1).Unit
     local dot = (hrp.Position - centro):Dot(ladoGol)
@@ -59,7 +74,6 @@ local function chuteAutoGol()
     local delta = alvoFinal - hrp.Position
     local dist = delta.Magnitude
     local horizontal = Vector3.new(delta.X, 0, delta.Z).Unit
-
     local mult = 0.14 + (math.floor((dist - 60) / 20) * 0.01)
     local altura = dist * mult
     local dir = (horizontal + Vector3.new(0, altura / dist, 0)).Unit
@@ -68,7 +82,7 @@ local function chuteAutoGol()
 end
 
 -- ==========================================
--- 3. AUTO STEAL (COM BACK-TP)
+-- 3. AUTO STEAL (TP DE FRENTE PARA A BOLA)
 -- ==========================================
 local function executarAutoSteal()
     local ball = getBall()
@@ -82,35 +96,34 @@ local function executarAutoSteal()
 
     while ball and ball.Parent and (tick() - startTime < 1.2) do
         if ball:GetAttribute("State") == "UNTOUCHABLE" then sucesso = true break end
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.CFrame = CFrame.new(ball.Position + Vector3.new(0, 2, 0))
+        
+        -- TP mantendo o tronco virado para a bola e 2 studs de altura para não bugar no chão
+        tpSeguro(ball.Position + Vector3.new(0, 2.5, 0), ball.Position)
         task.wait(0.03)
     end
-    if sucesso then task.wait(0.05) hrp.CFrame = oldPos end
+    
+    if sucesso then 
+        task.wait(0.05) 
+        tpSeguro(oldPos) 
+    end
 end
 
 -- ==========================================
--- LÓGICA DO POWER SHOT (M2 / SHOOTBTN)
+-- LÓGICA M2 / HOLD
 -- ==========================================
 local function M2Action(_, state)
     if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
-
     if state == Enum.UserInputState.Begin then
-        segurandoM2 = true
-        tempoM2 = tick()
+        segurandoM2 = true; tempoM2 = tick()
     elseif state == Enum.UserInputState.End then
         if segurandoM2 then
             segurandoM2 = false
             local holdReq = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.47
-            
             if (tick() - tempoM2) >= holdReq then
                 if disparoPendente then return end
                 disparoPendente = true
                 task.delay(DELAY_DISPARO, function()
-                    for i = 1, 4 do
-                        chuteForte()
-                        task.wait()
-                    end
+                    for i = 1, 4 do chuteForte(); task.wait() end
                     disparoPendente = false
                 end)
             end
@@ -127,52 +140,36 @@ ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
 PassBtn.MouseButton1Click:Connect(chuteAutoGol)
 
--- ==========================================
--- INPUTS TECLADO (STEAL, GOL, SPAM)
--- ==========================================
+-- INPUTS TECLADO
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     local configs = getgenv().RRR_Configs
-    
-    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then
-        executarAutoSteal()
-    end
-    
+    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then executarAutoSteal() end
     if configs.States["KeyAutoGoal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyAutoGoal"]:upper()] then
         task.spawn(function()
             local ball = getBall()
             if not ball then return end
-            getHRP().CFrame = CFrame.new(ball.Position + Vector3.new(0, 2, 0))
+            tpSeguro(ball.Position + Vector3.new(0, 2.5, 0), ball.Position)
             Tackle:FireServer()
-            task.wait(0.2)
-            getHRP().CFrame = (player.Team.Name == "Red") and CFrame.new(GOAL_TP_BLUE) or CFrame.new(GOAL_TP_RED)
+            task.wait(0.25)
+            tpSeguro((player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED)
             task.wait(0.8)
             chuteAutoGol()
         end)
     end
-
-    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then
-        Tackle:FireServer()
-    end
+    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then Tackle:FireServer() end
 end)
 
--- ==========================================
--- LOOPS (BUFFS E ATRIBUTOS)
--- ==========================================
+-- LOOP BUFFS
 task.spawn(function()
     while true do
         local hum = getChar():FindFirstChild("Humanoid")
         local configs = getgenv().RRR_Configs
-        
         if configs.States["KeyTackle"] and hum then
-            hum.WalkSpeed = 40
-            hum.JumpPower = 63
+            hum.WalkSpeed = 40; hum.JumpPower = 63
         end
-
         if configs.States["Flow"] then player:SetAttribute("Flow", true) end
         if configs.States["Meta"] then player:SetAttribute("Metavision", true) end
         task.wait(0.5)
     end
 end)
-
-print("RRR HUB: Script Adicionais carregado com sucesso!")
