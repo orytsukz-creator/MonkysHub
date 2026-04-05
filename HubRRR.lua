@@ -1,40 +1,34 @@
--- RRR HUB V1.3 - COMPLETO
+-- RRR HUB V1.4 - COMPLETO
 getgenv().Menu = getgenv().Menu or {}
 getgenv().RRR_Configs = { States = {}, Keys = {} } 
-getgenv().ScriptAtivoRRR = true -- Variável mestre de controle
+getgenv().ScriptAtivoRRR = true
 
 local Menu = getgenv().Menu
 local HttpService = game:GetService("HttpService")
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
 local FILE_NAME = "RRR_Keybinds.json"
 
 Menu.SavedKeys = {}
 
--- Funções de Persistência
 local function SaveConfig()
-    if writefile then
-        writefile(FILE_NAME, HttpService:JSONEncode(Menu.SavedKeys))
-    end
+    if writefile then writefile(FILE_NAME, HttpService:JSONEncode(Menu.SavedKeys)) end
 end
 
 if isfile and isfile(FILE_NAME) then
-    pcall(function()
-        Menu.SavedKeys = HttpService:JSONDecode(readfile(FILE_NAME))
-    end)
+    pcall(function() Menu.SavedKeys = HttpService:JSONDecode(readfile(FILE_NAME)) end)
 end
 
--- Limpeza de execução anterior
 if Menu.Gui then Menu.Gui:Destroy() end
 
--- Criar a ScreenGui no CoreGui
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR" 
 RRR.Parent = (gethui and gethui()) or CoreGui
 Menu.Gui = RRR
 
--- Estrutura Principal
+-- [ESTRUTURA VISUAL MANTIDA]
 local Drag = Instance.new("ImageLabel", RRR)
 Drag.Name = "Drag"
 Drag.BackgroundTransparency = 1
@@ -76,7 +70,6 @@ Options.Image = "rbxassetid://78746999303808"
 local UIListLayout_Opt = Instance.new("UIListLayout", Options)
 UIListLayout_Opt.Padding = UDim.new(0, 5)
 
--- Gerenciador de Abas
 local Tabs = {}
 local function CreateTab(name)
     local Scroller = Instance.new("ScrollingFrame", Main)
@@ -86,9 +79,7 @@ local function CreateTab(name)
     Scroller.Visible = false
     Scroller.ScrollBarThickness = 2
     Scroller.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    local Layout = Instance.new("UIListLayout", Scroller)
-    Layout.Padding = UDim.new(0, 5)
-    Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    Instance.new("UIListLayout", Scroller).Padding = UDim.new(0, 5)
     Tabs[name] = Scroller
     
     local Btn = Instance.new("TextButton", Options)
@@ -108,8 +99,8 @@ local MiscTab = CreateTab("Misc")
 local PlayerTab = CreateTab("Player")
 MiscTab.Visible = true
 
--- Função para criar os Cheats
-local function AddCheat(parent, name, placeholder, saveId, type)
+-- FUNÇÃO ADD CHEAT ATUALIZADA
+local function AddCheat(parent, name, placeholder, saveId, type, callback)
     getgenv().RRR_Configs.States[saveId] = false
     
     local M = Instance.new("Frame", parent)
@@ -120,12 +111,13 @@ local function AddCheat(parent, name, placeholder, saveId, type)
 
     local Lab = Instance.new("TextLabel", M)
     Lab.Size = UDim2.new(0.3, 0, 1, 0)
+    Lab.Position = UDim2.new(0.02, 0, 0, 0)
     Lab.Text = name
     Lab.TextColor3 = Color3.new(1,1,1)
     Lab.BackgroundTransparency = 1
     Lab.TextScaled = true
+    Lab.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Criação de TextBox (Power, Hold, Keybinds)
     local function CreateBox(posX, sizeX, pHolder, sId, isKey)
         local Box = Instance.new("TextBox", M)
         Box.Size = UDim2.new(sizeX, 0, 0.5, 0)
@@ -135,114 +127,136 @@ local function AddCheat(parent, name, placeholder, saveId, type)
         Box.TextColor3 = Color3.fromRGB(255, 0, 0)
         Box.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
         Instance.new("UICorner", Box)
-
-        Box:GetPropertyChangedSignal("Text"):Connect(function()
-            local txt = Box.Text
-            if isKey == "Keybind" then
-                if #txt > 1 then Box.Text = txt:sub(1,1) end
-                local prohibited = {"1","2","3","4","w","a","s","d","p"," "} -- P agora é proibido no bind
-                for _, k in pairs(prohibited) do if txt:lower():find(k) then Box.Text = "" end end
-            else
-                Box.Text = txt:gsub("[^%d%.]", "")
-            end
-        end)
-
         Box.FocusLost:Connect(function()
             Menu.SavedKeys[sId] = Box.Text
             getgenv().RRR_Configs.Keys[sId] = Box.Text
             SaveConfig()
         end)
-        -- Inicializa a config global
         getgenv().RRR_Configs.Keys[sId] = Box.Text
-    end
-
-    -- Criação de Toggles de Opção (True/False do Shoot)
-    local function CreateOption(posX, sId)
-        local Opt = Instance.new("TextButton", M)
-        Opt.Size = UDim2.new(0.08, 0, 0.4, 0)
-        Opt.Position = UDim2.new(posX, 0, 0.3, 0)
-        local savedState = Menu.SavedKeys[sId] or false
-        getgenv().RRR_Configs.States[sId] = savedState
-        
-        Opt.BackgroundColor3 = savedState and Color3.new(0, 0.6, 0) or Color3.new(0.2, 0.2, 0.2)
-        Opt.Text = ""
-        Instance.new("UICorner", Opt)
-
-        Opt.MouseButton1Click:Connect(function()
-            local newState = not getgenv().RRR_Configs.States[sId]
-            getgenv().RRR_Configs.States[sId] = newState
-            Menu.SavedKeys[sId] = newState
-            Opt.BackgroundColor3 = newState and Color3.new(0, 0.6, 0) or Color3.new(0.2, 0.2, 0.2)
-            SaveConfig()
-        end)
     end
 
     if type == "PowerWithHold" then
         CreateBox(0.32, 0.14, "Pwr", "PowerValue")
         CreateBox(0.48, 0.14, "Hold", "HoldValue")
-        CreateOption(0.64, "PowerOption1") 
-        CreateOption(0.73, "PowerOption2")
+        -- Options True/False
+        for i=1,2 do
+            local sId = "PowerOption"..i
+            local Opt = Instance.new("TextButton", M)
+            Opt.Size = UDim2.new(0.08, 0, 0.4, 0)
+            Opt.Position = UDim2.new(0.55 + (i*0.09), 0, 0.3, 0)
+            local st = Menu.SavedKeys[sId] or false
+            getgenv().RRR_Configs.States[sId] = st
+            Opt.BackgroundColor3 = st and Color3.new(0, 0.6, 0) or Color3.new(0.2, 0.2, 0.2)
+            Opt.Text = ""
+            Instance.new("UICorner", Opt)
+            Opt.MouseButton1Click:Connect(function()
+                getgenv().RRR_Configs.States[sId] = not getgenv().RRR_Configs.States[sId]
+                Menu.SavedKeys[sId] = getgenv().RRR_Configs.States[sId]
+                Opt.BackgroundColor3 = getgenv().RRR_Configs.States[sId] and Color3.new(0, 0.6, 0) or Color3.new(0.2, 0.2, 0.2)
+                SaveConfig()
+            end)
+        end
     elseif type == "Keybind" then
         CreateBox(0.4, 0.25, placeholder, saveId, "Keybind")
+    elseif type == "ButtonOnly" then
+        Lab.Size = UDim2.new(0.6, 0, 1, 0)
+        local B = Instance.new("TextButton", M)
+        B.Size = UDim2.new(0.3, 0, 0.6, 0)
+        B.Position = UDim2.new(0.65, 0, 0.2, 0)
+        B.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+        B.Text = "EXECUTE"
+        B.TextColor3 = Color3.new(1,1,1)
+        B.TextScaled = true
+        Instance.new("UICorner", B)
+        B.MouseButton1Click:Connect(callback)
     end
 
-    -- Botão ON/OFF Lateral
-    local Btn = Instance.new("TextButton", M)
-    Btn.Size = UDim2.new(0.15, 0, 0.5, 0)
-    Btn.Position = UDim2.new(0.83, 0, 0.25, 0)
-    Btn.BackgroundColor3 = Color3.fromRGB(229, 0, 4)
-    Btn.Text = "OFF"
-    Btn.TextColor3 = Color3.new(1,1,1)
-    Btn.TextScaled = true
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(1, 0)
-
-    Btn.MouseButton1Click:Connect(function()
-        Btn.Text = (Btn.Text == "OFF") and "ON" or "OFF"
-        Btn.BackgroundColor3 = (Btn.Text == "ON") and Color3.new(0, 0.6, 0) or Color3.fromRGB(229, 0, 4)
-        getgenv().RRR_Configs.States[saveId] = (Btn.Text == "ON")
-    end)
+    -- Botão ON/OFF (Não aparece no ButtonOnly)
+    if type ~= "ButtonOnly" then
+        local Btn = Instance.new("TextButton", M)
+        Btn.Size = UDim2.new(0.15, 0, 0.5, 0)
+        Btn.Position = UDim2.new(0.83, 0, 0.25, 0)
+        Btn.BackgroundColor3 = Color3.fromRGB(229, 0, 4)
+        Btn.Text = "OFF"
+        Btn.TextColor3 = Color3.new(1,1,1)
+        Btn.TextScaled = true
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(1, 0)
+        Btn.MouseButton1Click:Connect(function()
+            Btn.Text = (Btn.Text == "OFF") and "ON" or "OFF"
+            Btn.BackgroundColor3 = (Btn.Text == "ON") and Color3.new(0, 0.6, 0) or Color3.fromRGB(229, 0, 4)
+            getgenv().RRR_Configs.States[saveId] = (Btn.Text == "ON")
+        end)
+    end
 end
 
--- Adicionando os Itens
-AddCheat(MiscTab, "PowerShot", "", "PowerShotState", "PowerWithHold")
+-- FUNÇÕES ESPECÍFICAS
+local function FixCameraFunc()
+    local char = player.Character
+    if char then
+        camera.CameraSubject = char:FindFirstChild("Humanoid")
+        camera.CameraType = Enum.CameraType.Custom
+    end
+end
+
+local function TeamSelectFunc()
+    local ts = player.PlayerGui:FindFirstChild("TeamSelect")
+    if ts then ts.Enabled = true end
+end
+
+local function CancelAnimsFunc()
+    for _, p in pairs(game.Players:GetPlayers()) do
+        local c = p.Character
+        if c then
+            local hum = c:FindFirstChild("Humanoid")
+            if hum then
+                for _, anim in pairs(hum:GetPlayingAnimationTracks()) do anim:Stop() end
+            end
+        end
+    end
+    FixCameraFunc()
+    local hum = player.Character:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = 40 hum.JumpPower = 63 end
+end
+
+-- CONFIGURAÇÃO DOS ITENS
+AddCheat(MiscTab, "PowerShot", "", "PowerValue", "PowerWithHold")
 AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal", "Keybind")
 AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal", "Keybind")
+AddCheat(MiscTab, "Cancel Anim's", "KEY", "KeyCancelAnim", "Keybind")
 AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle", "Keybind")
+
+AddCheat(PlayerTab, "Team Select", "", "TSelect", "ButtonOnly", TeamSelectFunc)
+AddCheat(PlayerTab, "Fix Cam", "", "FCam", "ButtonOnly", FixCameraFunc)
 AddCheat(PlayerTab, "Metavision", "", "Meta", "ToggleOnly")
 AddCheat(PlayerTab, "Fake Flow", "", "Flow", "ToggleOnly")
 
--- Função de Parada Total (Tecla P)
-local function FinalizarScript()
-    getgenv().ScriptAtivoRRR = false
-    if Menu.Gui then Menu.Gui:Destroy() end
-    -- Reseta humanoide e atributos (Adicionais.lua fará o mesmo via variável global)
-    local hum = player.Character and player.Character:FindFirstChild("Humanoid")
-    if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end
-    player:SetAttribute("Flow", false)
-    player:SetAttribute("Metavision", false)
-    print("RRR HUB DESATIVADO.")
-end
-
--- Inputs de Sistema (Z e P)
+-- TECLA P E BIND DO CANCEL ANIM
 UIS.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.P then
-        FinalizarScript()
-    elseif not gpe and input.KeyCode == Enum.KeyCode.Z then
-        Drag.Visible = not Drag.Visible
+        getgenv().ScriptAtivoRRR = false
+        if Menu.Gui then Menu.Gui:Destroy() end
+    elseif not gpe then
+        if input.KeyCode == Enum.KeyCode.Z then Drag.Visible = not Drag.Visible end
+        
+        -- Bind para Cancel Anim
+        local cancelKey = getgenv().RRR_Configs.Keys["KeyCancelAnim"]
+        if getgenv().RRR_Configs.States["KeyCancelAnim"] and cancelKey ~= "" and input.KeyCode == Enum.KeyCode[cancelKey:upper()] then
+            CancelAnimsFunc()
+        end
     end
 end)
 
--- Sistema de Arrastar
+-- ARRASTAR (MOUSE & TOUCH)
 local dragging, dragStart, startPos
 UpBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true; dragStart = input.Position; startPos = Drag.Position
     end
 end)
 UIS.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStart
         Drag.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
-UIS.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+UIS.InputEnded:Connect(function(i) dragging = false end)
