@@ -1,4 +1,5 @@
 getgenv().Menu = getgenv().Menu or {}
+getgenv().RRR_Configs = { States = {}, Keys = {} } -- TABELA PARA VOCÊ USAR NOS SEUS COMANDOS
 local Menu = getgenv().Menu
 local HttpService = game:GetService("HttpService")
 local FILE_NAME = "RRR_Keybinds.json"
@@ -62,9 +63,7 @@ Minimize.Position = UDim2.new(0.88, 0, 0.36, 0)
 Minimize.Image = "rbxassetid://138567149317610"
 Minimize.BackgroundTransparency = 1
 
-Minimize.MouseButton1Click:Connect(function()
-    Drag.Visible = false
-end)
+Minimize.MouseButton1Click:Connect(function() Drag.Visible = false end)
 
 local Options = Instance.new("ImageLabel", Drag)
 Options.Name = "Options"
@@ -106,6 +105,9 @@ local PlayerTab = CreateTab("Player")
 MiscTab.Visible = true
 
 local function AddCheat(parent, name, placeholder, saveId)
+    getgenv().RRR_Configs.States[saveId] = false -- Começa OFF
+    getgenv().RRR_Configs.Keys[saveId] = Menu.SavedKeys[saveId] or ""
+
     local M = Instance.new("Frame", parent)
     M.Size = UDim2.new(0.98, 0, 0, 60)
     M.BackgroundTransparency = 0.8
@@ -128,15 +130,11 @@ local function AddCheat(parent, name, placeholder, saveId)
     Box.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
     Instance.new("UICorner", Box)
 
-    -- Trava de 1 Letra e Bloqueio de Teclas Proibidas
     Box:GetPropertyChangedSignal("Text"):Connect(function()
         local txt = Box.Text:lower()
         local prohibited = {"1","2","3","4","w","a","s","d"," "}
-        
         if #txt > 1 then Box.Text = txt:sub(1,1) end
-        for _, key in pairs(prohibited) do
-            if txt:find(key) then Box.Text = "" end
-        end
+        for _, key in pairs(prohibited) do if txt:find(key) then Box.Text = "" end end
     end)
 
     local Btn = Instance.new("TextButton", M)
@@ -151,10 +149,12 @@ local function AddCheat(parent, name, placeholder, saveId)
     Btn.MouseButton1Click:Connect(function()
         Btn.Text = (Btn.Text == "OFF") and "ON" or "OFF"
         Btn.BackgroundColor3 = (Btn.Text == "ON") and Color3.new(0, 0.6, 0) or Color3.fromRGB(229, 0, 4)
+        getgenv().RRR_Configs.States[saveId] = (Btn.Text == "ON") -- AQUI ENVIA O ESTADO
     end)
 
     Box.FocusLost:Connect(function()
         Menu.SavedKeys[saveId] = Box.Text
+        getgenv().RRR_Configs.Keys[saveId] = Box.Text -- AQUI ENVIA A TECLA
         SaveConfig()
     end)
 end
@@ -163,31 +163,25 @@ AddCheat(MiscTab, "PowerShot", "170-230", "PowerValue")
 AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal")
 AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal")
 AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle")
-
 AddCheat(PlayerTab, "Metavision", "OFF", "Meta")
 AddCheat(PlayerTab, "Fake Flow", "OFF", "Flow")
 
 local UIS = game:GetService("UserInputService")
 local player = game.Players.LocalPlayer
 
--- Reativar via Z
 UIS.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.Z then Drag.Visible = not Drag.Visible end
 end)
 
--- Reativar via Mobile (3s FlowButton)
 task.spawn(function()
     local FlowButton = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 10):WaitForChild("Frame", 2):WaitForChild("FlowButton", 2)
     if FlowButton then
         local holdTime = 0
         FlowButton.MouseButton1Down:Connect(function() holdTime = tick() end)
-        FlowButton.MouseButton1Up:Connect(function()
-            if tick() - holdTime >= 1.5 then Drag.Visible = true end
-        end)
+        FlowButton.MouseButton1Up:Connect(function() if tick() - holdTime >= 3 then Drag.Visible = true end end)
     end
 end)
 
--- Sistema de Drag
 local dragging, dragStart, startPos
 UpBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
