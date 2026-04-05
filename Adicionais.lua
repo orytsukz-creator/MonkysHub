@@ -12,7 +12,7 @@ local scriptAtivo = true
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
--- DEFINIÇÕES DOS GOLS
+-- DEFINIÇÕES DOS GOLS (Z é o eixo lateral/largura no seu mapa)
 local GOL_AZUL = {
     TraveEsq = Vector3.new(-2202, -12, 1006),
     TraveDir = Vector3.new(-2203, -12, 1049)
@@ -22,7 +22,7 @@ local GOL_VERMELHO = {
     TraveDir = Vector3.new(-2908, -12, 1007)
 }
 
--- TPs DE POSICIONAMENTO RESTAURADOS
+-- TPs DE POSICIONAMENTO
 local GOAL_TP_RED = Vector3.new(-2848, -25, 1030)
 local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
 
@@ -38,25 +38,30 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- AUTO GOL (DIREÇÃO E ALTURA CALIBRADAS)
+-- AUTO GOL (X/Z ESTREITADO PARA NÃO IR FORA)
 -- ==========================================
 local function executarChuteAutoGol()
     if not scriptAtivo then return end
     local hrp = getHRP()
     local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
     
-    -- Mira nos cantos (20% das extremidades)
+    -- Narrowing (Estreitamento): 
+    -- Em vez de 0-100%, usamos 10-30% (Canto A) ou 70-90% (Canto B)
+    -- Isso evita as traves e o fundo de fora.
     local sorteioLado = math.random(1, 2)
-    local offsetZ = (sorteioLado == 1) and (math.random(0, 20)/100) or (math.random(80, 100)/100)
+    local offsetZ
+    if sorteioLado == 1 then
+        offsetZ = math.random(10, 30) / 100 -- Canto Esquerdo interno
+    else
+        offsetZ = math.random(70, 90) / 100 -- Canto Direito interno
+    end
     
     local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
     
-    -- Alvo vertical: -14 é uma altura segura para entrar no alto sem isolar
+    -- Y em -14 conforme o teste anterior que ficou top
     local alvoFinal = Vector3.new(pontoBase.X, -14, pontoBase.Z)
 
     local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
-    
-    -- Ajuste fino de Y: 0.05 para uma subida leve e veloz
     local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.05, 0)
 
     for i = 1, 4 do
@@ -67,7 +72,7 @@ local function executarChuteAutoGol()
 end
 
 -- ==========================================
--- AUTO STEAL (IMPULSO 3x + INTERCEPTAÇÃO)
+-- AUTO STEAL (MANTIDO)
 -- ==========================================
 local function executarAutoSteal()
     if not scriptAtivo then return end
@@ -98,10 +103,8 @@ local function executarAutoSteal()
     while scriptAtivo and ball and ball.Parent and (tick() - startTime < 3.0) and not pegouABola do
         local velBola = ball.AssemblyLinearVelocity
         local speed = velBola.Magnitude
-        
         local alturaAjustada = ball.Position.Y - 1.5
         if alturaAjustada < -25 then alturaAjustada = -24.5 end
-        
         local posAlvo = Vector3.new(ball.Position.X, alturaAjustada, ball.Position.Z)
 
         if speed > 10 then
@@ -109,11 +112,9 @@ local function executarAutoSteal()
             posAlvo = posAlvo + (velBola.Unit * fatorPos)
             hrp.AssemblyLinearVelocity = velBola.Unit * (speed * 3.0)
         end
-        
         tpSeguro(posAlvo)
         task.wait(0.02)
     end
-
     if conexao then conexao:Disconnect() end
     if pegouABola and scriptAtivo then 
         hrp.AssemblyLinearVelocity = Vector3.zero
@@ -122,24 +123,15 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- FUNÇÃO DE PARADA (TECLA P) - DELETA RRR
+-- FUNÇÃO DE PARADA (TECLA P)
 -- ==========================================
 local function stopScript()
     scriptAtivo = false
     CAS:UnbindAction("M2ChuteForte")
-    
-    -- Deleta a interface RRR do CoreGui
     local rrrGui = CoreGui:FindFirstChild("RRR")
     if rrrGui then rrrGui:Destroy() end
-    
-    -- Reset Humanoide
     local hum = getChar():FindFirstChild("Humanoid")
-    if hum then
-        hum.WalkSpeed = 16
-        hum.JumpPower = 50
-    end
-    
-    -- Limpa Atributos
+    if hum then hum.WalkSpeed = 16 hum.JumpPower = 50 end
     player:SetAttribute("Flow", false)
     player:SetAttribute("Metavision", false)
 end
@@ -149,12 +141,7 @@ end
 -- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    
-    if input.KeyCode == Enum.KeyCode.P then
-        stopScript()
-        return
-    end
-
+    if input.KeyCode == Enum.KeyCode.P then stopScript() return end
     if not scriptAtivo then return end
     local configs = getgenv().RRR_Configs
 
