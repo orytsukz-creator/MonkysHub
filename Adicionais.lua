@@ -59,7 +59,7 @@ local function executarChuteAutoGol()
     local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
     
     -- Y em -14 conforme o teste anterior que ficou top
-    local alvoFinal = Vector3.new(pontoBase.X, -13.70, pontoBase.Z)
+    local alvoFinal = Vector3.new(pontoBase.X, -13.10, pontoBase.Z)
 
     local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
     local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.05, 0)
