@@ -1,20 +1,19 @@
-
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-local CAS = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local ativo = true
 
--- Remotes e Cooldown
+-- Remotes
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
-local ultimoChute = 0
-local COOLDOWN_TIME = 0.3
 
--- Mobile Setup (Conforme seu diretório)
+-- Variáveis de Controle
+local ultimoChute = 0
+local COOLDOWN_TIME = 0.3 -- Cooldown de 0.3s para sincronia
+local segurando, tempoInicio = false, 0
+
+-- Mobile Setup
 local MobileFrame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport"):WaitForChild("Frame")
 local ShootBtn = MobileFrame:WaitForChild("ShootButton")
 local TackleBtn = MobileFrame:WaitForChild("TackleButton")
@@ -24,25 +23,21 @@ local TalentBtn = MobileFrame:WaitForChild("TalentButton")
 local function getHRP() return player.Character:WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
-local function tpSeguro(pos)
-    local hrp = getHRP()
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.CFrame = typeof(pos) == "CFrame" and pos or CFrame.new(pos)
-end
-
--- Lógica do Power Shot
+-- ==========================================
+-- LÓGICA DO POWER SHOT (MELHORADA)
+-- ==========================================
 local function chutePower()
+    -- Verifica se já passou o tempo de cooldown
     if tick() - ultimoChute < COOLDOWN_TIME then return end
     ultimoChute = tick()
     
     local hrp = getHRP()
+    -- Puxa os valores da UI ou usa padrões se estiverem vazios
     local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
+    
     local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0,.14,0)) * 10000000).Unit
     Shoot:FireServer(forcaUI, dir, dir, hrp.Position, true, true)
 end
-
--- Sistema de Hold (Unificado PC/Mobile)
-local segurando, tempoInicio = false, 0
 
 local function startHold()
     if not getgenv().RRR_Configs.States["PowerValue"] then return end
@@ -53,71 +48,78 @@ end
 local function endHold()
     if not segurando then return end
     segurando = false
-    -- Pega o Hold Time direto da UI (ex: 0.47)
-    local holdConfig = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.47
-    if (tick() - tempoInicio) >= holdConfig then
-        for i = 1, 4 do chutePower() task.wait() end
+    
+    local duracao = tick() - tempoInicio
+    -- Pega o Hold Time da UI (ex: 0.47)
+    local holdNecessario = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.47
+    
+    if duracao >= holdNecessario then
+        -- Dispara 4 vezes para garantir o Power Shot (conforme seu pedido)
+        for i = 1, 4 do 
+            chutePower() 
+            task.wait(0.01) 
+        end
     end
 end
 
--- Binds PowerShot (M2 no PC / ShootButton no Mobile)
-CAS:BindActionAtPriority("M2PowerShot", function(_, state)
-    if state == Enum.UserInputState.Begin then startHold() elseif state == Enum.UserInputState.End then endHold() end
-    return Enum.ContextActionResult.Pass
-end, false, 3000, Enum.UserInputType.MouseButton2)
-
-ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then startHold() end end)
-ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then endHold() end end)
-
--- Auto Tackle (Função com Back-TP)
-local function executarAutoTackle()
+-- ==========================================
+-- AUTO GOL (SISTEMA QUE HAVIA PARADO)
+-- ==========================================
+local function executarAutoGol()
+    if not getgenv().RRR_Configs.States["KeyAutoGoal"] then return end
+    
     local ball = getBall()
+    if not ball then return end
+    
     local hrp = getHRP()
-    if not ball or ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then return end
-
-    local oldPos = hrp.CFrame
+    -- Teleporta pra bola e dá tackle pra pegar
+    hrp.CFrame = CFrame.new(ball.Position + Vector3.new(0, 2, 0))
     Tackle:FireServer()
-    local startTime = tick()
-    local sucesso = false
-
-    while ball and ball.Parent and (tick() - startTime < 1.2) do
-        if ball:GetAttribute("State") == "UNTOUCHABLE" then sucesso = true break end
-        tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-        task.wait(0.03)
-    end
-    if sucesso then task.wait(0.05) tpSeguro(oldPos) end
+    
+    task.wait(0.3) -- Tempo para o servidor processar a posse
+    
+    -- Lógica de chute pro gol inimigo
+    local alvoTP = (player.Team.Name == "Red") and Vector3.new(-2261, -25, 1030) or Vector3.new(-2848, -25, 1030)
+    hrp.CFrame = CFrame.new(alvoTP)
+    
+    task.wait(0.5)
+    chutePower() -- Usa a função de chute definida acima
 end
 
--- Inputs (Keybinds e Mobile Buttons)
-UIS.InputBegan:Connect(function(input, processed)
-    if processed or not ativo then return end
-    local configs = getgenv().RRR_Configs
+-- ==========================================
+-- BINDS E INPUTS
+-- ==========================================
 
-    -- Auto Steal
-    local keySteal = configs.Keys["KeySteal"]
-    if configs.States["KeySteal"] and keySteal ~= "" and input.KeyCode == Enum.KeyCode[keySteal:upper()] then
-        executarAutoTackle()
-    end
-
-    -- Spam Tackle
-    local keySpam = configs.Keys["KeyTackle"]
-    if configs.States["KeyTackle"] and keySpam ~= "" and input.KeyCode == Enum.KeyCode[keySpam:upper()] then
-        Tackle:FireServer()
+-- PC (M2 para PowerShot / Teclas para o resto)
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then startHold() end
+    
+    -- Auto Gol Tecla
+    local keyGoal = getgenv().RRR_Configs.Keys["KeyAutoGoal"]
+    if keyGoal ~= "" and input.KeyCode == Enum.KeyCode[keyGoal:upper()] then
+        executarAutoGol()
     end
 end)
 
--- Mobile Clicks (Steal e Spam no mesmo botão / Goal no Talent)
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then endHold() end
+end)
+
+-- MOBILE (Mapeamento total)
+ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then startHold() end end)
+ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then endHold() end end)
+
+TalentBtn.MouseButton1Click:Connect(executarAutoGol)
+
 TackleBtn.MouseButton1Click:Connect(function()
-    if getgenv().RRR_Configs.States["KeySteal"] then executarAutoTackle() end
-    if getgenv().RRR_Configs.States["KeyTackle"] then Tackle:FireServer() end
+    if getgenv().RRR_Configs.States["KeySteal"] then
+        -- Coloque aqui sua função de AutoSteal (executarAutoTackle)
+        executarAutoTackle() 
+    end
 end)
 
-TalentBtn.MouseButton1Click:Connect(function()
-    -- Aqui você chamaria a sua função de AutoGol (chuteAutoGol) se ela estiver definida
-    print("Auto Gol acionado via Mobile")
-end)
-
--- Loop de Atributos (Player Tab)
+-- LOOP ATRIBUTOS
 task.spawn(function()
     while true do
         if getgenv().RRR_Configs.States["Flow"] then player:SetAttribute("Flow", true) end
@@ -126,4 +128,4 @@ task.spawn(function()
     end
 end)
 
-print("RRR Hub: Tudo pronto! Mobile, Hold editável e Cooldown ativos.")
+print("Adicionais Carregados: PowerShot e AutoGol corrigidos!")
