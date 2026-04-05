@@ -1,4 +1,4 @@
--- UPDATE V1
+-- UPDATE V1.1
 
 getgenv().Menu = getgenv().Menu or {}
 getgenv().RRR_Configs = { States = {}, Keys = {} } 
@@ -108,7 +108,7 @@ MiscTab.Visible = true
 local function AddCheat(parent, name, placeholder, saveId, type)
     getgenv().RRR_Configs.States[saveId] = false
     getgenv().RRR_Configs.Keys[saveId] = Menu.SavedKeys[saveId] or ""
-
+    
     local M = Instance.new("Frame", parent)
     M.Size = UDim2.new(0.98, 0, 0, 60)
     M.BackgroundTransparency = 0.8
@@ -122,36 +122,47 @@ local function AddCheat(parent, name, placeholder, saveId, type)
     Lab.BackgroundTransparency = 1
     Lab.TextScaled = true
 
-    if type ~= "ToggleOnly" then
+    -- Função auxiliar para criar as TextBoxes
+    local function CreateBox(posX, sizeX, pHolder, sId, isKey)
         local Box = Instance.new("TextBox", M)
-        Box.Size = UDim2.new(0.25, 0, 0.5, 0)
-        Box.Position = UDim2.new(0.4, 0, 0.25, 0)
-        Box.Text = Menu.SavedKeys[saveId] or ""
-        Box.PlaceholderText = placeholder
+        Box.Size = UDim2.new(sizeX, 0, 0.5, 0)
+        Box.Position = UDim2.new(posX, 0, 0.25, 0)
+        Box.Text = Menu.SavedKeys[sId] or ""
+        Box.PlaceholderText = pHolder
         Box.TextColor3 = Color3.fromRGB(255, 0, 0)
         Box.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
         Instance.new("UICorner", Box)
 
         Box:GetPropertyChangedSignal("Text"):Connect(function()
             local txt = Box.Text
-            if type == "Keybind" then
+            if isKey == "Keybind" then
                 if #txt > 1 then Box.Text = txt:sub(1,1) end
                 local prohibited = {"1","2","3","4","w","a","s","d"," "}
                 for _, k in pairs(prohibited) do if txt:lower():find(k) then Box.Text = "" end end
-            elseif type == "Number" then
-                -- NOVA LÓGICA: Aceita números e ponto (ex: 0.47)
-                Box.Text = txt:gsub("[^%d%.]", "") 
+            else
+                Box.Text = txt:gsub("[^%d%.]", "") -- Aceita números e ponto
                 if #Box.Text > 5 then Box.Text = Box.Text:sub(1,5) end
             end
         end)
 
         Box.FocusLost:Connect(function()
-            Menu.SavedKeys[saveId] = Box.Text
-            getgenv().RRR_Configs.Keys[saveId] = Box.Text
+            Menu.SavedKeys[sId] = Box.Text
+            getgenv().RRR_Configs.Keys[sId] = Box.Text
             SaveConfig()
         end)
     end
 
+    if type == "PowerWithHold" then
+        -- Duas caixas: Força e Hold
+        CreateBox(0.38, 0.16, "Pwr", "PowerValue")
+        CreateBox(0.56, 0.16, "Hold", "HoldValue")
+    elseif type == "Keybind" then
+        CreateBox(0.4, 0.25, placeholder, saveId, "Keybind")
+    elseif type == "Number" then
+        CreateBox(0.4, 0.25, placeholder, saveId)
+    end
+
+    -- Botão ON/OFF (Apenas um para o cheat todo)
     local Btn = Instance.new("TextButton", M)
     Btn.Size = UDim2.new(0.2, 0, 0.5, 0)
     Btn.Position = UDim2.new(0.75, 0, 0.25, 0)
@@ -168,18 +179,11 @@ local function AddCheat(parent, name, placeholder, saveId, type)
     end)
 end
 
--- ==========================================
--- CONFIGURAÇÃO DOS ITENS (MISC & PLAYER)
--- ==========================================
-
--- MISC TAB
-AddCheat(MiscTab, "PowerShot", "230", "PowerValue", "Number")
-AddCheat(MiscTab, "Hold Time", "0.5", "HoldValue", "Number")
+-- CONFIGURAÇÃO DOS ITENS
+AddCheat(MiscTab, "PowerShot", "", "PowerValue", "PowerWithHold") -- Agora tem as 2 caixas
 AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal", "Keybind")
 AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal", "Keybind")
 AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle", "Keybind")
-
--- PLAYER TAB
 AddCheat(PlayerTab, "Metavision", "", "Meta", "ToggleOnly")
 AddCheat(PlayerTab, "Fake Flow", "", "Flow", "ToggleOnly")
 
