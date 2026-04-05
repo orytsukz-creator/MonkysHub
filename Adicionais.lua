@@ -5,14 +5,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
+-- CONFIGURAÇÃO DE STATUS
+local scriptAtivo = true
+
 -- REMOTES
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
--- CONFIGURAÇÃO DE PARADA (TECLA P)
-local scriptAtivo = true
-
--- DEFINIÇÕES DOS GOLS (MIRA)
+-- DEFINIÇÕES DOS GOLS (MIRA ALEATÓRIA)
 local GOL_AZUL = {
     TraveEsq = Vector3.new(-2202, -12, 1006),
     TraveDir = Vector3.new(-2203, -12, 1049)
@@ -22,14 +22,9 @@ local GOL_VERMELHO = {
     TraveDir = Vector3.new(-2908, -12, 1007)
 }
 
--- TPs RESTAURADOS
+-- TPs DE POSICIONAMENTO
 local GOAL_TP_RED = Vector3.new(-2848, -25, 1030)
 local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
-
--- CONTROLE
-local segurandoM2 = false
-local tempoM2 = 0
-local disparoPendente = false
 
 local function getChar() return player.Character or player.CharacterAdded:Wait() end
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
@@ -43,7 +38,38 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- AUTO STEAL (IMPULSO 3x + INTERCEPTAÇÃO)
+-- AUTO GOL (MIRA CALIBRADA: GAVETA)
+-- ==========================================
+local function executarChuteAutoGol()
+    if not scriptAtivo then return end
+    local hrp = getHRP()
+    local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
+    
+    -- Sorteia o canto (evita o meio onde o GK fica)
+    local sorteioLado = math.random(1, 2)
+    local offsetZ = (sorteioLado == 1) and (math.random(0, 25)/100) or (math.random(75, 100)/100)
+    
+    -- Ponto horizontal entre as traves
+    local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
+    
+    -- AJUSTE DE ALTURA: -16 a -12 é a altura ideal da trave para não isolar
+    local alturaGaveta = math.random(-16, -13)
+    local alvoFinal = Vector3.new(pontoBase.X, alturaGaveta, pontoBase.Z)
+
+    local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
+    
+    -- Direção com leve curva para cima, mas controlada
+    local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.08, 0)
+
+    for i = 1, 4 do
+        if not scriptAtivo then break end
+        Shoot:FireServer(forcaUI, dir, dir, hrp.Position, true, true)
+        task.wait()
+    end
+end
+
+-- ==========================================
+-- AUTO STEAL (3x IMPULSO + INTERCEPTAÇÃO)
 -- ==========================================
 local function executarAutoSteal()
     if not scriptAtivo then return end
@@ -98,68 +124,46 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- AUTO GOL (MIRA NAS TRAVES + 4x SHOT)
--- ==========================================
-local function executarChuteAutoGol()
-    if not scriptAtivo then return end
-    local hrp = getHRP()
-    local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
-    
-    local sorteioLado = math.random(1, 2)
-    local offsetZ = (sorteioLado == 1) and (math.random(0, 20)/100) or (math.random(80, 100)/100)
-    
-    local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
-    local alvoFinal = Vector3.new(pontoBase.X, math.random(-11, -6), pontoBase.Z)
-
-    local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
-    local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.18, 0)
-
-    for i = 1, 4 do
-        if not scriptAtivo then break end
-        Shoot:FireServer(forcaUI, dir, dir, hrp.Position, true, true)
-        task.wait()
-    end
-end
-
--- ==========================================
--- SISTEMA DE PARADA TOTAL (TECLA P)
+-- FUNÇÃO DE PARADA (TECLA P)
 -- ==========================================
 local function stopScript()
     scriptAtivo = false
     CAS:UnbindAction("M2ChuteForte")
     
-    -- Deletar GUI
-    local gui = player.PlayerGui:FindFirstChild("MonkysHub") or player.PlayerGui:FindFirstChild("Frame") -- Ajuste o nome se necessário
-    if gui then gui:Destroy() end
+    -- Busca profunda para deletar a Interface
+    for _, v in pairs(player.PlayerGui:GetChildren()) do
+        if v:IsA("ScreenGui") and (v.Name:find("Monkys") or v:FindFirstChild("Main") or v:FindFirstChild("Frame")) then
+            v:Destroy()
+        end
+    end
     
-    -- Resetar Status do Boneco
+    -- Reset Humanoide
     local hum = getChar():FindFirstChild("Humanoid")
     if hum then
         hum.WalkSpeed = 16
         hum.JumpPower = 50
     end
     
-    -- Remover Atributos
+    -- Limpa Atributos
     player:SetAttribute("Flow", false)
     player:SetAttribute("Metavision", false)
-    
-    print("Script MonkysHub Encerrado com Sucesso.")
 end
 
 -- ==========================================
--- BINDINGS
+-- INPUTS
 -- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if not scriptAtivo then return end
     
-    -- Tecla de Parada (Não listada)
+    -- Tecla de Emergência P
     if input.KeyCode == Enum.KeyCode.P then
         stopScript()
         return
     end
 
+    if not scriptAtivo then return end
     local configs = getgenv().RRR_Configs
+
     if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then 
         executarAutoSteal() 
     end
@@ -173,13 +177,13 @@ UIS.InputBegan:Connect(function(input, gpe)
             task.wait(0.15)
             local posGol = (player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
             tpSeguro(posGol)
-            task.wait(0.6)
+            task.wait(0.5)
             executarChuteAutoGol()
         end)
     end
 end)
 
--- M2 CHUTE (Binding de Contexto)
+-- M2 CHUTE FORTE
 CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
     if not scriptAtivo or not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
     if state == Enum.UserInputState.Begin then segurandoM2 = true tempoM2 = tick()
@@ -200,7 +204,7 @@ CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
     return Enum.ContextActionResult.Pass
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
--- LOOP BUFFS (Com Verificação de Atividade)
+-- LOOP BUFFS
 task.spawn(function()
     while scriptAtivo do
         local hum = getChar():FindFirstChild("Humanoid")
