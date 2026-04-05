@@ -32,7 +32,7 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- FUNÇÃO TP (ESTILO ANTIGO)
+-- FUNÇÃO TP (SIMPLES E DIRETA)
 -- ==========================================
 local function tpSeguro(pos)
     local hrp = getHRP()
@@ -51,7 +51,7 @@ local function chuteForte()
 end
 
 -- ==========================================
--- 2. CHUTE AUTO GOL
+-- 2. CHUTE AUTO GOL (MIRA AUTOMÁTICA)
 -- ==========================================
 local function chuteAutoGol()
     local hrp = getHRP()
@@ -74,31 +74,43 @@ local function chuteAutoGol()
 end
 
 -- ==========================================
--- 3. AUTO STEAL (ESTILO ANTIGO)
+-- 3. AUTO STEAL (TP BALL & TP BACK)
 -- ==========================================
 local function executarAutoSteal()
     local ball = getBall()
     local hrp = getHRP()
+    
+    -- Verifica se a bola existe e se já não é nossa ou intocável
     if not ball or ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then return end
 
-    local oldPos = hrp.CFrame
+    -- [TP BACK SETUP] Salva a posição de onde você estava
+    local posicaoOriginal = hrp.CFrame 
+    
     Tackle:FireServer()
     local startTime = tick()
-    local sucesso = false
+    local pegouABola = false
 
-    while ball and ball.Parent and (tick() - startTime < 1.2) do
-        if ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then 
-            sucesso = true 
+    -- [TP BALL LOOP] Tenta seguir a bola até conseguir roubar
+    while ball and ball.Parent and (tick() - startTime < 1.0) do
+        -- Se o estado da bola mudar para o nosso nome ou intocável, interrompe
+        if ball:GetAttribute("State") == player.Name or ball:GetAttribute("State") == "UNTOUCHABLE" then 
+            pegouABola = true 
             break 
         end
+        
         tpSeguro(ball.Position + Vector3.new(0, 2, 0))
         task.wait(0.03)
     end
-    if sucesso then task.wait(0.05) tpSeguro(oldPos) end
+    
+    -- [EXECUÇÃO DO TP BACK] Só volta se o roubo teve sucesso
+    if pegouABola then 
+        task.wait(0.1) 
+        tpSeguro(posicaoOriginal) 
+    end
 end
 
 -- ==========================================
--- LÓGICA DO POWER SHOT (M2 / SHOOTBTN)
+-- LOGICA M2 / HOLD (4x REPETIÇÕES)
 -- ==========================================
 local function M2Action(_, state)
     if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
@@ -125,17 +137,23 @@ end
 
 CAS:BindActionAtPriority("M2ChuteForte", M2Action, false, 3000, Enum.UserInputType.MouseButton2)
 
--- MOBILE INPUTS
+-- MOBILE BINDINGS
 ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then segurandoM2 = true tempoM2 = tick() end end)
 ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then M2Action(nil, Enum.UserInputState.End) end end)
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
 PassBtn.MouseButton1Click:Connect(chuteAutoGol)
 
--- INPUTS TECLADO
+-- TECLADO BINDINGS
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     local configs = getgenv().RRR_Configs
-    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then executarAutoSteal() end
+    
+    -- Auto Steal
+    if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then 
+        executarAutoSteal() 
+    end
+    
+    -- Auto Gol Combo (TP Bola + TP Gol + Chute)
     if configs.States["KeyAutoGoal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyAutoGoal"]:upper()] then
         task.spawn(function()
             local ball = getBall()
@@ -148,10 +166,14 @@ UIS.InputBegan:Connect(function(input, gpe)
             chuteAutoGol()
         end)
     end
-    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then Tackle:FireServer() end
+    
+    -- Spam Tackle
+    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then 
+        Tackle:FireServer() 
+    end
 end)
 
--- LOOP BUFFS / ATRIBUTOS
+-- LOOP BUFFS & ATRIBUTOS
 task.spawn(function()
     while true do
         local hum = getChar():FindFirstChild("Humanoid")
