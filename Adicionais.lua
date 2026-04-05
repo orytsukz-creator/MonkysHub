@@ -9,21 +9,22 @@ local camera = workspace.CurrentCamera
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
--- DEFINIÇÕES DOS GOLS (TRAVES E CENTRO)
+-- CONFIGURAÇÃO DE PARADA (TECLA P)
+local scriptAtivo = true
+
+-- DEFINIÇÕES DOS GOLS (MIRA)
 local GOL_AZUL = {
     TraveEsq = Vector3.new(-2202, -12, 1006),
-    TraveDir = Vector3.new(-2203, -12, 1049),
-    GkCenter = Vector3.new(-2210, -25, 1026)
+    TraveDir = Vector3.new(-2203, -12, 1049)
 }
 local GOL_VERMELHO = {
     TraveEsq = Vector3.new(-2907, -12, 1049),
-    TraveDir = Vector3.new(-2908, -12, 1007),
-    GkCenter = Vector3.new(-2903, -25, 1030)
+    TraveDir = Vector3.new(-2908, -12, 1007)
 }
 
--- POSIÇÕES DE TELEPORTE (ONDE VOCÊ PARA PRA CHUTAR)
-local GOAL_TP_RED = Vector3.new(-2817, -25, 1029)
-local GOAL_TP_BLUE = Vector3.new(-2292, -25, 1030)
+-- TPs RESTAURADOS
+local GOAL_TP_RED = Vector3.new(-2848, -25, 1030)
+local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
 
 -- CONTROLE
 local segurandoM2 = false
@@ -35,60 +36,17 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 local function tpSeguro(pos)
+    if not scriptAtivo then return end
     local hrp = getHRP()
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.CFrame = typeof(pos) == "CFrame" and pos or CFrame.new(pos)
 end
 
 -- ==========================================
--- 1. CHUTE FORTE (POWER SHOT BASE)
--- ==========================================
-local function chuteForte(alvoManual)
-    local hrp = getHRP()
-    local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
-    local dir
-    
-    if alvoManual then
-        -- Se for Auto Gol, calcula a direção para o ponto aleatório no alto
-        dir = (alvoManual - hrp.Position).Unit + Vector3.new(0, 0.15, 0) -- Adiciona elevação
-    else
-        -- Se for M2, mira na câmera
-        dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, .14, 0)) * 10000000).Unit
-    end
-    
-    Shoot:FireServer(forcaUI, dir, dir, hrp.Position, true, true)
-end
-
--- ==========================================
--- 2. AUTO GOL ALEATÓRIO (EVITA GK)
--- ==========================================
-local function executarChuteAutoGol()
-    local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
-    
-    -- Gera um offset aleatório entre as traves (Z) e altura (Y)
-    -- Evitamos o centro (GkCenter) forçando o chute para as extremidades
-    local sorteioLado = math.random(1, 2)
-    local offsetZ
-    if sorteioLado == 1 then
-        offsetZ = math.random(0, 15) / 100 -- Lado Esquerdo
-    else
-        offsetZ = math.random(85, 100) / 100 -- Lado Direito
-    end
-    
-    local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
-    local alvoFinal = Vector3.new(pontoBase.X, math.random(-10, -5), pontoBase.Z) -- Sempre chuta no alto
-
-    -- Dispara 4 vezes para ser impegável
-    for i = 1, 4 do
-        chuteForte(alvoFinal)
-        task.wait()
-    end
-end
-
--- ==========================================
--- 3. AUTO STEAL (IMPULSO 3x + TP DINÂMICO)
+-- AUTO STEAL (IMPULSO 3x + INTERCEPTAÇÃO)
 -- ==========================================
 local function executarAutoSteal()
+    if not scriptAtivo then return end
     local ball = getBall()
     local hrp = getHRP()
     if not ball or ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then return end
@@ -100,28 +58,31 @@ local function executarAutoSteal()
     conexao = ball:GetAttributeChangedSignal("State"):Connect(function()
         if ball:GetAttribute("State") == player.Name or ball:GetAttribute("State") == "UNTOUCHABLE" then
             pegouABola = true
-            conexao:Disconnect()
+            if conexao then conexao:Disconnect() end
         end
     end)
 
     task.spawn(function()
         for i = 1, 50 do
-            if pegouABola or not ball.Parent then break end
+            if not scriptAtivo or pegouABola or not ball.Parent then break end
             Tackle:FireServer()
             task.wait(0.06)
         end
     end)
 
     local startTime = tick()
-    while ball and ball.Parent and (tick() - startTime < 3.0) and not pegouABola do
+    while scriptAtivo and ball and ball.Parent and (tick() - startTime < 3.0) and not pegouABola do
         local velBola = ball.AssemblyLinearVelocity
         local speed = velBola.Magnitude
-        local posAlvo = ball.Position + Vector3.new(0, 1.8, 0)
+        
+        local alturaAjustada = ball.Position.Y - 1.5
+        if alturaAjustada < -25 then alturaAjustada = -24.5 end
+        
+        local posAlvo = Vector3.new(ball.Position.X, alturaAjustada, ball.Position.Z)
 
         if speed > 10 then
             local fatorPos = math.clamp(speed / 30, 1, 4)
             posAlvo = posAlvo + (velBola.Unit * fatorPos)
-            -- [IMPULSO 3x BRUTAL]
             hrp.AssemblyLinearVelocity = velBola.Unit * (speed * 3.0)
         end
         
@@ -130,19 +91,75 @@ local function executarAutoSteal()
     end
 
     if conexao then conexao:Disconnect() end
-    if pegouABola then 
+    if pegouABola and scriptAtivo then 
         hrp.AssemblyLinearVelocity = Vector3.zero
         tpSeguro(posicaoOriginal) 
     end
 end
 
 -- ==========================================
--- INPUTS E BINDINGS
+-- AUTO GOL (MIRA NAS TRAVES + 4x SHOT)
+-- ==========================================
+local function executarChuteAutoGol()
+    if not scriptAtivo then return end
+    local hrp = getHRP()
+    local golAlvo = (player.Team and player.Team.Name == "Red") and GOL_AZUL or GOL_VERMELHO
+    
+    local sorteioLado = math.random(1, 2)
+    local offsetZ = (sorteioLado == 1) and (math.random(0, 20)/100) or (math.random(80, 100)/100)
+    
+    local pontoBase = golAlvo.TraveEsq:Lerp(golAlvo.TraveDir, offsetZ)
+    local alvoFinal = Vector3.new(pontoBase.X, math.random(-11, -6), pontoBase.Z)
+
+    local forcaUI = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
+    local dir = (alvoFinal - hrp.Position).Unit + Vector3.new(0, 0.18, 0)
+
+    for i = 1, 4 do
+        if not scriptAtivo then break end
+        Shoot:FireServer(forcaUI, dir, dir, hrp.Position, true, true)
+        task.wait()
+    end
+end
+
+-- ==========================================
+-- SISTEMA DE PARADA TOTAL (TECLA P)
+-- ==========================================
+local function stopScript()
+    scriptAtivo = false
+    CAS:UnbindAction("M2ChuteForte")
+    
+    -- Deletar GUI
+    local gui = player.PlayerGui:FindFirstChild("MonkysHub") or player.PlayerGui:FindFirstChild("Frame") -- Ajuste o nome se necessário
+    if gui then gui:Destroy() end
+    
+    -- Resetar Status do Boneco
+    local hum = getChar():FindFirstChild("Humanoid")
+    if hum then
+        hum.WalkSpeed = 16
+        hum.JumpPower = 50
+    end
+    
+    -- Remover Atributos
+    player:SetAttribute("Flow", false)
+    player:SetAttribute("Metavision", false)
+    
+    print("Script MonkysHub Encerrado com Sucesso.")
+end
+
+-- ==========================================
+-- BINDINGS
 -- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    local configs = getgenv().RRR_Configs
+    if not scriptAtivo then return end
     
+    -- Tecla de Parada (Não listada)
+    if input.KeyCode == Enum.KeyCode.P then
+        stopScript()
+        return
+    end
+
+    local configs = getgenv().RRR_Configs
     if configs.States["KeySteal"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeySteal"]:upper()] then 
         executarAutoSteal() 
     end
@@ -151,49 +168,49 @@ UIS.InputBegan:Connect(function(input, gpe)
         task.spawn(function()
             local ball = getBall()
             if not ball then return end
-            tpSeguro(ball.Position + Vector3.new(0, 1.5, 0))
+            tpSeguro(ball.Position + Vector3.new(0, 1, 0))
             Tackle:FireServer()
             task.wait(0.15)
             local posGol = (player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
             tpSeguro(posGol)
-            task.wait(0.6) -- Reduzi o delay para o chute ser mais rápido
+            task.wait(0.6)
             executarChuteAutoGol()
         end)
     end
-    
-    if configs.States["KeyTackle"] and input.KeyCode == Enum.KeyCode[configs.Keys["KeyTackle"]:upper()] then 
-        Tackle:FireServer() 
-    end
 end)
 
--- M2 / SHOOT BUTTON
+-- M2 CHUTE (Binding de Contexto)
 CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
-    if not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
+    if not scriptAtivo or not getgenv().RRR_Configs.States["PowerValue"] then return Enum.ContextActionResult.Pass end
     if state == Enum.UserInputState.Begin then segurandoM2 = true tempoM2 = tick()
     elseif state == Enum.UserInputState.End and segurandoM2 then
         segurandoM2 = false
         if (tick() - tempoM2) >= (tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.47) then
             if disparoPendente then return end
             disparoPendente = true
-            task.delay(0.01, function() for i = 1, 4 do chuteForte() task.wait() end disparoPendente = false end)
+            task.delay(0.01, function() 
+                if not scriptAtivo then return end
+                local hrp = getHRP()
+                local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, .14, 0)) * 10000000).Unit
+                for i = 1, 4 do Shoot:FireServer(tonumber(getgenv().RRR_Configs.Keys["PowerValue"]), dir, dir, hrp.Position, true, true) task.wait() end 
+                disparoPendente = false 
+            end)
         end
     end
     return Enum.ContextActionResult.Pass
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
--- MOBILE
-local MobileFrame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport"):WaitForChild("Frame")
-MobileFrame:WaitForChild("TackleButton").MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
-MobileFrame:WaitForChild("PassCallButton").MouseButton1Click:Connect(executarChuteAutoGol)
-
--- LOOP BUFFS
+-- LOOP BUFFS (Com Verificação de Atividade)
 task.spawn(function()
-    while true do
+    while scriptAtivo do
         local hum = getChar():FindFirstChild("Humanoid")
         local configs = getgenv().RRR_Configs
-        if configs.States["KeyTackle"] and hum then hum.WalkSpeed = 40 hum.JumpPower = 63 end
-        if configs.States["Flow"] then player:SetAttribute("Flow", true) end
-        if configs.States["Meta"] then player:SetAttribute("Metavision", true) end
+        if configs and configs.States["KeyTackle"] and hum then 
+            hum.WalkSpeed = 40 
+            hum.JumpPower = 63 
+        end
+        if configs and configs.States["Flow"] then player:SetAttribute("Flow", true) end
+        if configs and configs.States["Meta"] then player:SetAttribute("Metavision", true) end
         task.wait(0.5)
     end
 end)
