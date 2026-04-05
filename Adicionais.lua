@@ -69,7 +69,7 @@ local function executarAutoSteal()
         -- Se a bola estiver se movendo (mais que 10 de velocidade)
         if velBola.Magnitude > 10 then
             -- Calcula a direção e joga o player 2.5 studs À FRENTE do movimento
-            local antecipacao = velBola.Unit * 2.5 
+            local antecipacao = velBola.Unit * 4
             posAlvo = posAlvo + antecipacao
         end
         
