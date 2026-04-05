@@ -26,6 +26,7 @@ local DELAY_DISPARO = 0.01
 local MobileFrame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport"):WaitForChild("Frame")
 local ShootBtn = MobileFrame:WaitForChild("ShootButton")
 local TackleBtn = MobileFrame:WaitForChild("TackleButton")
+local PassBtn = MobileFrame:WaitForChild("PassCallButton")
 local TalentBtn = MobileFrame:WaitForChild("TalentButton")
 
 local function getChar() return player.Character or player.CharacterAdded:Wait() end
@@ -124,7 +125,7 @@ CAS:BindActionAtPriority("M2ChuteForte", M2Action, false, 3000, Enum.UserInputTy
 ShootBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then segurandoM2 = true tempoM2 = tick() end end)
 ShootBtn.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then M2Action(nil, Enum.UserInputState.End) end end)
 TackleBtn.MouseButton1Click:Connect(function() if getgenv().RRR_Configs.States["KeySteal"] then executarAutoSteal() end end)
-TalentBtn.MouseButton1Click:Connect(chuteAutoGol)
+PassBtn.MouseButton1Click:Connect(chuteAutoGol)
 
 -- ==========================================
 -- INPUTS TECLADO (STEAL, GOL, SPAM)
