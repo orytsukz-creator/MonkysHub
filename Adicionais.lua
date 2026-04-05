@@ -2,14 +2,11 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local CAS = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CoreGui = game:GetService("CoreGui")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Variável mestre
 getgenv().ScriptAtivoRRR = true 
 
--- REMOTES
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
@@ -23,20 +20,17 @@ local function getChar() return player.Character or player.CharacterAdded:Wait()
 local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
--- FUNÇÃO DISPARAR (Sincronizada com PowerOption 1 e 2)
 local function dispararBola(forca, direcao)
     if not getgenv().ScriptAtivoRRR then return end
     local hrp = getHRP()
     local configs = getgenv().RRR_Configs
-    
     local opt1 = configs.States["PowerOption1"] or false
     local opt2 = configs.States["PowerOption2"] or false
-    
     Shoot:FireServer(forca, direcao, direcao, hrp.Position, opt1, opt2)
 end
 
 -- ==========================================
--- AUTO STEAL (MAGNET PURA - SEM BUG DE Y)
+-- AUTO STEAL (POSIÇÃO EXATA DA BOLA)
 -- ==========================================
 local function executarAutoSteal()
     if not getgenv().ScriptAtivoRRR then return end
@@ -46,23 +40,25 @@ local function executarAutoSteal()
 
     local pegou = false
     local con; con = ball:GetAttributeChangedSignal("State"):Connect(function()
-        if ball:GetAttribute("State") == player.Name then pegou = true con:Disconnect() end
+        if ball:GetAttribute("State") == player.Name then 
+            pegou = true 
+            con:Disconnect() 
+        end
     end)
 
-    -- Spam de Tackle mais rápido
     task.spawn(function()
-        for i = 1, 80 do
+        for i = 1, 100 do
             if not getgenv().ScriptAtivoRRR or pegou then break end
             Tackle:FireServer()
-            task.wait(0.03)
+            task.wait(0.02)
         end
     end)
 
     local start = tick()
     while getgenv().ScriptAtivoRRR and not pegou and (tick() - start < 3) do
-        -- Gruda na bola com offset fixo de altura pra não enterrar no chão
-        local bp = ball.Position
-        hrp.CFrame = CFrame.new(bp.X, bp.Y - 1, bp.Z) 
+        -- Teleporta exatamente para a posição da bola (X, Y, Z)
+        -- Sem cálculos extras, apenas o CFrame da bola
+        hrp.CFrame = ball.CFrame
         hrp.AssemblyLinearVelocity = Vector3.zero 
         task.wait()
     end
@@ -70,7 +66,7 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- AUTO GOL (MIRA INTERNA)
+-- AUTO GOL
 -- ==========================================
 local function executarAutoGoal()
     local hrp = getHRP()
@@ -86,7 +82,7 @@ local function executarAutoGoal()
 end
 
 -- ==========================================
--- INPUTS E BINDINGS
+-- INPUTS
 -- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.P then getgenv().ScriptAtivoRRR = false return end
@@ -94,12 +90,10 @@ UIS.InputBegan:Connect(function(input, gpe)
     
     local c = getgenv().RRR_Configs
     
-    -- Steal
     if c.States["KeySteal"] and input.KeyCode == Enum.KeyCode[c.Keys["KeySteal"]:upper()] then
         executarAutoSteal()
     end
     
-    -- Goal
     if c.States["KeyAutoGoal"] and input.KeyCode == Enum.KeyCode[c.Keys["KeyAutoGoal"]:upper()] then
         task.spawn(function()
             local b = getBall()
@@ -114,10 +108,10 @@ UIS.InputBegan:Connect(function(input, gpe)
     end
 end)
 
--- POWER SHOT (CORRIGIDO NOME DA VARIÁVEL)
+-- POWER SHOT (SYNC COM A UI)
 CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
-    -- O nome correto na UI é "PowerShotState"
-    if not getgenv().ScriptAtivoRRR or not getgenv().RRR_Configs.States["PowerShotState"] then 
+    local configs = getgenv().RRR_Configs
+    if not getgenv().ScriptAtivoRRR or not configs.States["PowerShotState"] then 
         return Enum.ContextActionResult.Pass 
     end
     
@@ -125,9 +119,9 @@ CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
         segurandoM2 = true tempoM2 = tick()
     elseif state == Enum.UserInputState.End and segurandoM2 then
         segurandoM2 = false
-        local hold = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.5
+        local hold = tonumber(configs.Keys["HoldValue"]) or 0.5
         if (tick() - tempoM2) >= hold then
-            local pwr = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
+            local pwr = tonumber(configs.Keys["PowerValue"]) or 230
             local dir = (camera.CFrame.LookVector * 1000 + Vector3.new(0, 0.14, 0)).Unit
             for i = 1, 4 do dispararBola(pwr, dir) task.wait() end 
         end
@@ -135,7 +129,7 @@ CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
     return Enum.ContextActionResult.Pass
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
--- BUFFS LOOP
+-- LOOP STATUS
 task.spawn(function()
     while task.wait(0.5) do
         if not getgenv().ScriptAtivoRRR then break end
