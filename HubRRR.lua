@@ -1,3 +1,5 @@
+-- UPDATE V1
+
 getgenv().Menu = getgenv().Menu or {}
 getgenv().RRR_Configs = { States = {}, Keys = {} } 
 local Menu = getgenv().Menu
@@ -120,9 +122,8 @@ local function AddCheat(parent, name, placeholder, saveId, type)
     Lab.BackgroundTransparency = 1
     Lab.TextScaled = true
 
-    local Box
     if type ~= "ToggleOnly" then
-        Box = Instance.new("TextBox", M)
+        local Box = Instance.new("TextBox", M)
         Box.Size = UDim2.new(0.25, 0, 0.5, 0)
         Box.Position = UDim2.new(0.4, 0, 0.25, 0)
         Box.Text = Menu.SavedKeys[saveId] or ""
@@ -138,8 +139,9 @@ local function AddCheat(parent, name, placeholder, saveId, type)
                 local prohibited = {"1","2","3","4","w","a","s","d"," "}
                 for _, k in pairs(prohibited) do if txt:lower():find(k) then Box.Text = "" end end
             elseif type == "Number" then
-                Box.Text = txt:gsub("%D", "") -- Remove tudo que não for número
-                if #Box.Text > 3 then Box.Text = Box.Text:sub(1,3) end -- Máximo 3 dígitos
+                -- NOVA LÓGICA: Aceita números e ponto (ex: 0.47)
+                Box.Text = txt:gsub("[^%d%.]", "") 
+                if #Box.Text > 5 then Box.Text = Box.Text:sub(1,5) end
             end
         end)
 
@@ -166,12 +168,18 @@ local function AddCheat(parent, name, placeholder, saveId, type)
     end)
 end
 
--- CONFIGURAÇÃO DOS ITENS
+-- ==========================================
+-- CONFIGURAÇÃO DOS ITENS (MISC & PLAYER)
+-- ==========================================
+
+-- MISC TAB
 AddCheat(MiscTab, "PowerShot", "230", "PowerValue", "Number")
+AddCheat(MiscTab, "Hold Time", "0.5", "HoldValue", "Number")
 AddCheat(MiscTab, "AutoSteal", "KEY", "KeySteal", "Keybind")
 AddCheat(MiscTab, "AutoGoal", "KEY", "KeyAutoGoal", "Keybind")
 AddCheat(MiscTab, "SpamTackle", "KEY", "KeyTackle", "Keybind")
 
+-- PLAYER TAB
 AddCheat(PlayerTab, "Metavision", "", "Meta", "ToggleOnly")
 AddCheat(PlayerTab, "Fake Flow", "", "Flow", "ToggleOnly")
 
