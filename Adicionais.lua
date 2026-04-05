@@ -15,7 +15,7 @@ local function getHRP() return getChar():WaitForChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- ==========================================
--- AUTO STEAL (COLADO NA BOLA - SEM DASH)
+-- AUTO STEAL (TELEPORTE PARADO NA BOLA)
 -- ==========================================
 local function executarAutoSteal()
     if not getgenv().ScriptAtivoRRR then return end
@@ -31,7 +31,7 @@ local function executarAutoSteal()
         end
     end)
 
-    -- Spam de Tackle
+    -- Spam de Roubo
     task.spawn(function()
         while getgenv().ScriptAtivoRRR and not pegou do
             Tackle:FireServer()
@@ -39,15 +39,15 @@ local function executarAutoSteal()
         end
     end)
 
-    -- Teleporte Seco (Em cima da bola)
+    -- Teleporte Estrito (Vai na posição exata da bola, sem adicionar velocidade)
     local start = tick()
     while getgenv().ScriptAtivoRRR and not pegou and (tick() - start < 3) do
-        -- Vai direto na bola sem previsão de movimento (Sem Dash)
-        hrp.CFrame = CFrame.new(ball.Position.X, ball.Position.Y + 2.2, ball.Position.Z)
+        -- Posição exata. Sem somar velocidade da bola (Ball.Position puro)
+        hrp.CFrame = CFrame.new(ball.Position.X, ball.Position.Y + 2.1, ball.Position.Z)
         
-        -- Trava física para estabilidade total
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+        -- Zera qualquer força que faria o boneco "dashar" ou deslizar
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         
         task.wait()
     end
@@ -55,34 +55,33 @@ local function executarAutoSteal()
 end
 
 -- ==========================================
--- POWER SHOT (M2) - CORRIGIDO
+-- POWER SHOT (M2 CORRIGIDO)
 -- ==========================================
-local segurandoM2 = false
-local tempoInicio = 0
-
 local function dispararChuteForte()
     local configs = getgenv().RRR_Configs
+    if not configs.States["PowerShotState"] then return end
+    
     local pwr = tonumber(configs.Keys["PowerValue"]) or 230
     local opt1 = configs.States["PowerOption1"] or false
     local opt2 = configs.States["PowerOption2"] or false
     
-    local dir = (camera.CFrame.LookVector * 1000 + Vector3.new(0, 0.15, 0)).Unit
+    local look = camera.CFrame.LookVector
+    local dir = (look * 1000 + Vector3.new(0, 0.15, 0)).Unit
+
     Shoot:FireServer(pwr, dir, dir, getHRP().Position, opt1, opt2)
 end
 
-CAS:BindActionAtPriority("ChuteM2", function(_, state)
-    local configs = getgenv().RRR_Configs
-    if not getgenv().ScriptAtivoRRR or not configs.States["PowerShotState"] then 
-        return Enum.ContextActionResult.Pass 
-    end
-    
+local segurandoM2 = false
+local tempoM2 = 0
+
+CAS:BindActionAtPriority("M2Shot", function(_, state)
     if state == Enum.UserInputState.Begin then
         segurandoM2 = true
-        tempoInicio = tick()
+        tempoM2 = tick()
     elseif state == Enum.UserInputState.End and segurandoM2 then
         segurandoM2 = false
-        local hold = tonumber(configs.Keys["HoldValue"]) or 0.5
-        if (tick() - tempoInicio) >= hold then
+        local hold = tonumber(getgenv().RRR_Configs.Keys["HoldValue"]) or 0.5
+        if (tick() - tempoM2) >= hold then
             dispararChuteForte()
         end
     end
@@ -90,8 +89,18 @@ CAS:BindActionAtPriority("ChuteM2", function(_, state)
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
 -- ==========================================
--- LOOP DE BUFFS E INPUTS
+-- INPUTS E LOOP DE STATUS
 -- ==========================================
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe or not getgenv().ScriptAtivoRRR then return end
+    local c = getgenv().RRR_Configs
+    local k = c.Keys["KeySteal"]
+    
+    if k and k ~= "" and input.KeyCode == Enum.KeyCode[k:upper()] then
+        executarAutoSteal()
+    end
+end)
+
 task.spawn(function()
     while task.wait(0.5) do
         if not getgenv().ScriptAtivoRRR then break end
@@ -99,19 +108,10 @@ task.spawn(function()
         player:SetAttribute("Metavision", c.States["Meta"])
         player:SetAttribute("Flow", c.States["Flow"])
         
+        -- SpamTackle/Speed se o botão da UI estiver ON
         if c.States["KeyTackle"] then
-            local hum = getChar():FindFirstChild("Humanoid")
-            if hum then hum.WalkSpeed = 40 end
+            local h = getChar():FindFirstChild("Humanoid")
+            if h then h.WalkSpeed = 40 end
         end
-    end
-end)
-
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe or not getgenv().ScriptAtivoRRR then return end
-    local configs = getgenv().RRR_Configs
-    local key = configs.Keys["KeySteal"]
-    
-    if key and key ~= "" and input.KeyCode == Enum.KeyCode[key:upper()] then
-        executarAutoSteal()
     end
 end)
