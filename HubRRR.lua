@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ConfigFile = "RRR_Settings.json"
 
--- // 1. Configurações Padrão
+-- // 1. CONFIGURAÇÕES E PERSISTÊNCIA
 local DefaultConfig = {
     Misc = {
         AutoGoal = {Enabled = false, Key = "G"},
@@ -26,7 +26,6 @@ local BlacklistedKeys = {
     ["Three"] = true, ["Four"] = true
 }
 
--- // 2. Persistência
 local function Save()
     if writefile then writefile(ConfigFile, HttpService:JSONEncode(getgenv().RRR_Config)) end
 end
@@ -45,7 +44,7 @@ local function Load()
 end
 Load()
 
--- // 3. UI Base
+-- // 2. ESTRUTURA DA INTERFACE
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR_Hub"
 RRR.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
@@ -80,9 +79,9 @@ end
 
 local MiscPage = CreatePage()
 local PlayerPage = CreatePage()
-MiscPage.Visible = true
+MiscPage.Visible = true -- PÁGINA INICIAL: MISC
 
--- // 4. Componentes
+-- // 3. COMPONENTES (BOTÕES E FUNÇÕES)
 local function AddCheat(parent, text, category, configKey, hasBind)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -5, 0, 45)
@@ -150,7 +149,7 @@ local function AddCheat(parent, text, category, configKey, hasBind)
     end)
 end
 
--- // Módulo Power Shot (Atualizado com Nome e botões TRUE/FALSE)
+-- MÓDULO POWER SHOT (CORRIGIDO)
 local function AddPowerShot(parent)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -5, 0, 145)
@@ -159,7 +158,6 @@ local function AddPowerShot(parent)
     frame.Parent = parent
     Instance.new("UICorner", frame)
 
-    -- Nome do Cheat que estava faltando
     local cheatLabel = Instance.new("TextLabel")
     cheatLabel.Text = "  Power Shot"
     cheatLabel.Size = UDim2.new(0, 150, 0, 35)
@@ -176,7 +174,6 @@ local function AddPowerShot(parent)
     box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     box.Text = getgenv().RRR_Config.Misc.PowerShot.Power
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
-    box.TextSize = 14
     box.Parent = frame
     Instance.new("UICorner", box)
     box.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.Power = box.Text; Save() end)
@@ -200,9 +197,8 @@ local function AddPowerShot(parent)
             local b = Instance.new("TextButton")
             b.Size = UDim2.new(0, 60, 0, 25)
             b.Position = UDim2.new(x, 0, 0.1, 0)
-            b.Text = name -- Aqui agora é "TRUE" ou "FALSE"
+            b.Text = name
             b.TextColor3 = Color3.fromRGB(255, 255, 255)
-            b.TextSize = 12
             b.Parent = r
             Instance.new("UICorner", b)
             
@@ -219,16 +215,14 @@ local function AddPowerShot(parent)
                 b.BackgroundTransparency = 0
             end)
         end
-        MkB("TRUE", true, 0.65)
-        MkB("FALSE", false, 0.82)
+        MkB("TRUE", true, 0.65); MkB("FALSE", false, 0.82)
     end
-
     CreateRow("Enabled Status:", 40, "Enabled")
     CreateRow("Apply Effect 1:", 75, "Effect")
     CreateRow("Apply Effect 2:", 110, "Effect2")
 end
 
--- // 5. Montagem Final
+-- // 4. MONTAGEM DAS PÁGINAS
 AddPowerShot(MiscPage)
 AddCheat(MiscPage, "Auto Goal", "Misc", "AutoGoal", true)
 AddCheat(MiscPage, "Auto Steal", "Misc", "AutoSteal", true)
@@ -236,5 +230,87 @@ AddCheat(PlayerPage, "Cancel Cutscene", "Player", "CancelCutscene", true)
 AddCheat(PlayerPage, "Fake Flow", "Player", "FakeFlow", false)
 AddCheat(PlayerPage, "Fake Metavision", "Player", "FakeMetavision", false)
 
--- Restante da UI (Barra Superior, Tabs, Mobile Toggle, Drag) permanece igual ao anterior...
--- [Omitido para encurtar, mas use a lógica de Toggle e Drag que já enviamos]
+-- // 5. BARRA SUPERIOR, TABS E BOTÃO CLOSE
+local UpBar = Instance.new("ImageLabel")
+UpBar.Size = UDim2.new(1, 0, 0.22, 0)
+UpBar.Position = UDim2.new(0, 0, -0.08, 0)
+UpBar.Image = "rbxassetid://74857124519074"
+UpBar.BackgroundTransparency = 1
+UpBar.Parent = Drag
+
+local Title = Instance.new("TextLabel")
+Title.Text = "R.R.R HUB · Meta Lock"
+Title.Position = UDim2.new(0.05, 0, 0.2, 0)
+Title.Size = UDim2.new(0.8, 0, 0.6, 0)
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 25
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = UpBar
+
+local CloseBtn = Instance.new("ImageButton")
+CloseBtn.Name = "Close"
+CloseBtn.Size = UDim2.new(0, 30, 0, 25)
+CloseBtn.Position = UDim2.new(0.9, 0, 0.3, 0)
+CloseBtn.Image = "rbxassetid://138567149317610"
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Parent = UpBar
+
+local Side = Instance.new("Frame")
+Side.Size = UDim2.new(0.15, 0, 0.5, 0)
+Side.Position = UDim2.new(0.02, 0, 0.18, 0)
+Side.BackgroundTransparency = 1
+Side.Parent = Drag
+Instance.new("UIListLayout", Side).Padding = UDim.new(0, 10)
+
+local function MakeTab(t, p)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, 0, 0, 35)
+    b.BackgroundTransparency = 1
+    b.Text = t
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.Font = Enum.Font.SourceSansBold
+    b.TextSize = 22
+    b.Parent = Side
+    b.MouseButton1Click:Connect(function() 
+        MiscPage.Visible = (p == MiscPage)
+        PlayerPage.Visible = (p == PlayerPage) 
+    end)
+end
+MakeTab("Misc", MiscPage); MakeTab("Player", PlayerPage)
+
+-- // 6. LOGICA DE TOGGLE (PC E MOBILE)
+local function Toggle() Drag.Visible = not Drag.Visible end
+
+-- Tecla Z (PC)
+UserInputService.InputBegan:Connect(function(i, g) if not g and i.KeyCode == Enum.KeyCode.Z then Toggle() end end)
+CloseBtn.MouseButton1Click:Connect(function() Drag.Visible = false end)
+
+-- MOBILE: SEGURAR FLOW BUTTON (1.5s)
+task.spawn(function()
+    local FlowBtn = LocalPlayer:WaitForChild("PlayerGui")
+        :WaitForChild("MobileSupport", 10)
+        :WaitForChild("Frame", 5)
+        :WaitForChild("FlowButton", 5)
+    
+    if FlowBtn then
+        local st
+        FlowBtn.MouseButton1Down:Connect(function() st = tick() end)
+        FlowBtn.MouseButton1Up:Connect(function() 
+            if st and (tick() - st) >= 1.5 then Toggle() end
+            st = nil 
+        end)
+    end
+end)
+
+-- LOGICA DE ARRASTAR (DRAG)
+local dS, sP, dragging
+Drag.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dS = i.Position; sP = Drag.Position end end)
+UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+    local delta = i.Position - dS
+    Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
+end end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+
+print("RRR Hub: Interface Carregada!")
