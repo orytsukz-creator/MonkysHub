@@ -64,15 +64,24 @@ end
 
 -- // 2. AUTO STEAL (Lógica Preditiva + TP Back)
 local function executarAutoSteal()
-    if not scriptAtivo or not getgenv().RRR_Config.Misc.AutoSteal.Enabled then return end
+    local cfg = getgenv().RRR_Config
+    if not scriptAtivo or not cfg.Misc.AutoSteal.Enabled then return end
+    
     local ball = getBall()
     local hrp = getHRP()
-    
     if not ball or ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then return end
 
+    local distance = (ball.Position - hrp.Position).Magnitude
     local posicaoOriginal = hrp.CFrame 
     local pegouABola = false
     
+    -- Se estiver MUITO perto (Magnitude < 10), apenas solta o Tackle sem dar TP
+    if distance <= 10 then
+        Tackle:FireServer()
+        return
+    end
+
+    -- Se estiver longe (Magnitude > 10), faz o Dash Seguro
     local conexao
     conexao = ball:GetAttributeChangedSignal("State"):Connect(function()
         if ball:GetAttribute("State") == player.Name or ball:GetAttribute("State") == "UNTOUCHABLE" then
@@ -81,39 +90,44 @@ local function executarAutoSteal()
         end
     end)
 
-    -- Tackle Spam
+    -- Spam de Roubo
     task.spawn(function()
-        for i = 1, 50 do
+        for i = 1, 30 do -- Reduzi o loop para ser mais leve
             if not scriptAtivo or pegouABola or not ball.Parent then break end
             Tackle:FireServer()
-            task.wait(0.06)
+            task.wait(0.08)
         end
     end)
 
     local startTime = tick()
-    while scriptAtivo and ball and ball.Parent and (tick() - startTime < 3.0) and not pegouABola do
+    while scriptAtivo and ball and ball.Parent and (tick() - startTime < 1.5) and not pegouABola do
         local velBola = ball.AssemblyLinearVelocity
-        local speed = velBola.Magnitude
-        local posAlvo = Vector3.new(ball.Position.X, math.max(ball.Position.Y - 1.5, -24.5), ball.Position.Z)
+        -- Posição segura: Ligeiramente acima da bola (+0.5) para não enterrar o pé no chão
+        local posAlvo = ball.Position + Vector3.new(0, 0.5, 0)
 
-        -- Se a magnitude for > 10, aplica a predição de movimento
-        if speed > 10 then
-            local fatorPos = math.clamp(speed / 30, 1, 4)
-            posAlvo = posAlvo + (velBola.Unit * fatorPos)
-            hrp.AssemblyLinearVelocity = velBola.Unit * (speed * 3.0)
+        -- Se a bola estiver vindo rápido, intercepta um pouco à frente dela
+        if velBola.Magnitude > 15 then
+            posAlvo = posAlvo + (velBola.Unit * 1.5)
         end
         
-        tpSeguro(posAlvo)
-        task.wait(0.02)
+        -- TP Suave: Mantém a rotação do personagem para ele não tombar
+        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0) -- Zera a velocidade para não "voar"
+        hrp.CFrame = CFrame.new(posAlvo, Vector3.new(ball.Position.X, hrp.Position.Y, ball.Position.Z))
+        
+        task.wait(0.03)
+        
+        -- Checa magnitude de novo durante o percurso
+        if (ball.Position - hrp.Position).Magnitude < 3 then break end
     end
     
     if conexao then conexao:Disconnect() end
-    if pegouABola and scriptAtivo then 
-        hrp.AssemblyLinearVelocity = Vector3.zero
+    
+    -- Volta para a posição original se configurado ou se não pegou a bola
+    if not pegouABola and scriptAtivo then 
+        task.wait(0.1)
         tpSeguro(posicaoOriginal) 
     end
 end
-
 -- // 3. M2 CHUTE FORTE (ContextActionService)
 local segurandoM2 = false
 local tempoM2 = 0
