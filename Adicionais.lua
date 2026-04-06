@@ -1,139 +1,137 @@
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CoreGui = game:GetService("CoreGui")
-local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- Espera a GUI ser criada pelo loadstring
-local RRR = CoreGui:WaitForChild("RRR", 10)
-if not RRR then warn("RRR HUB: Interface não encontrada!") return end
+-- Remotes do Jogo (Ajuste os nomes se necessário)
+local ShootRE = ReplicatedStorage:WaitForChild("ShootRE", 5)
+local TackleRE = ReplicatedStorage:FindFirstChild("Tackle", true) or ReplicatedStorage:FindFirstChild("TackleRE", true)
 
-local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
-local Drag = RRR:FindFirstChild("Drag")
-
--------------------------------------------------------------------------------
--- 1. TRAVAS DE SEGURANÇA (APLICADAS NA GUI EXISTENTE)
--------------------------------------------------------------------------------
-local function AplicarTravas()
-    for _, v in pairs(RRR:GetDescendants()) do
-        if v:IsA("TextBox") then
-            -- Trava de 1 Caractere (Exceto Power)
-            if v.Name ~= "PowerValue" and v.PlaceholderText ~= "230" then
-                v:GetPropertyChangedSignal("Text"):Connect(function()
-                    if #v.Text > 1 then v.Text = v.Text:sub(1,1) end
-                end)
-            end
-
-            -- Trava do Power (170 - 230)
-            if v.Name == "PowerValue" or v.PlaceholderText == "230" then
-                v.FocusLost:Connect(function()
-                    local val = tonumber(v.Text)
-                    if not val or val > 230 then v.Text = "230" 
-                    elseif val < 170 then v.Text = "170" end
-                    getgenv().RRR_Configs.Keys["PowerValue"] = v.Text
-                end)
-            end
-
-            -- Trava do Hold Time (Min .2 / Reset .47)
-            if v.Name == "HoldValue" or v.PlaceholderText == "0.5" then
-                v.FocusLost:Connect(function()
-                    local val = tonumber(v.Text)
-                    -- Se não tiver número ou tiver apenas '.', reseta pra .47
-                    if v.Text == "" or v.Text == "." or not val then 
-                        v.Text = "0.47" 
-                    elseif val < 0.2 then 
-                        v.Text = "0.2" 
-                    end
-                    getgenv().RRR_Configs.Keys["HoldValue"] = v.Text
-                end)
-            end
-        end
-    end
+-- // Verificação de Chat
+local function IsTyping()
+    return UIS:GetFocusedTextBox() ~= nil
 end
 
-task.spawn(AplicarTravas)
-
--------------------------------------------------------------------------------
--- 2. FUNÇÕES PRINCIPAIS
--------------------------------------------------------------------------------
-
--- AUTO GOAL (ÂNGULO 0.14)
+-- // 1. LÓGICA DE CHUTE (Auto Goal)
 local function executarAutoGoal()
-    if not getgenv().RRR_Configs.States["AutoGoalState"] then return end
-    local ball = workspace:FindFirstChild("Ball")
-    if not ball or ball:GetAttribute("State") ~= player.Name then return end
+    local cfg = getgenv().RRR_Config.Misc.AutoGoal
+    if not cfg.Enabled then return end
     
-    local goal = workspace:FindFirstChild("Goal") 
-    if goal then
-        local pwr = tonumber(getgenv().RRR_Configs.Keys["PowerValue"]) or 230
+    local ball = workspace:FindFirstChild("Ball")
+    if not ball or ball:GetAttribute("State") ~= LocalPlayer.Name then return end
+    
+    -- Procura o Gol (Geralmente uma Part chamada Goal ou dentro de um Model)
+    local goal = workspace:FindFirstChild("Goal", true) 
+    if goal and ShootRE then
+        local pwr = tonumber(getgenv().RRR_Config.Misc.PowerShot.Power) or 230
+        -- Ângulo de 0.14 como solicitado
         local direcao = (goal.Position - ball.Position).Unit + Vector3.new(0, 0.14, 0)
         
-        Shoot:FireServer(
+        ShootRE:FireServer(
             pwr, 
             direcao, 
             direcao, 
-            player.Character.HumanoidRootPart.Position, 
-            getgenv().RRR_Configs.States["PowerOption1"], 
-            getgenv().RRR_Configs.States["PowerOption2"]
+            LocalPlayer.Character.HumanoidRootPart.Position, 
+            getgenv().RRR_Config.Misc.PowerShot.Effect, 
+            getgenv().RRR_Config.Misc.PowerShot.Effect2
         )
     end
 end
 
--- AUTO STEAL SECO + TP BACK
+-- // 2. LÓGICA DE ROUBO (Auto Steal com trava de Magnitude)
 local function executarAutoSteal()
-    if not getgenv().RRR_Configs.States["AutoStealState"] then return end
-    local b = workspace:FindFirstChild("Ball")
-    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-    if not b or not hrp or b:GetAttribute("State") == player.Name then return end
+    local cfg = getgenv().RRR_Config.Misc.AutoSteal
+    if not cfg.Enabled then return end
     
-    local posO = hrp.CFrame
-    local start = tick()
+    local ball = workspace:FindFirstChild("Ball")
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not ball or not hrp or ball:GetAttribute("State") == LocalPlayer.Name then return end
     
-    while (tick() - start < 3) do
-        if not getgenv().RRR_Configs then break end
-        hrp.CFrame = CFrame.new(b.Position.X, b.Position.Y + 2.1, b.Position.Z)
+    local distance = (ball.Position - hrp.Position).Magnitude
+    local oldPos = hrp.CFrame
+    
+    -- REGRA: Só dá o "Dash" (TP) se a distância for maior que 10
+    if distance > 10 then
+        hrp.CFrame = CFrame.new(ball.Position.X, ball.Position.Y + 2.1, ball.Position.Z)
         hrp.Velocity = Vector3.zero
         
-        pcall(function()
-            ReplicatedStorage.Remotes.Tackle:FireServer()
-        end)
+        if TackleRE then TackleRE:FireServer() end
         
-        task.wait()
-        if b:GetAttribute("State") == player.Name then break end
+        task.wait(0.1) -- Tempo curto para o server registrar o roubo
+        hrp.CFrame = oldPos -- Volta pra posição original (TP Back)
+    else
+        -- Se estiver perto (menor que 10), apenas tenta o tackle sem dash/TP
+        if TackleRE then TackleRE:FireServer() end
     end
-    hrp.CFrame = posO
 end
 
--------------------------------------------------------------------------------
--- 3. INPUTS E PANIC BUTTON (P)
--------------------------------------------------------------------------------
+-- // 3. FAKE FLOW & METAVISION (Efeitos Visuais)
+local ColorGrading = Instance.new("ColorCorrectionEffect", Lighting)
+local BlueSky = Instance.new("BloomEffect", Lighting)
+ColorGrading.Enabled = false
+BlueSky.Enabled = false
 
-local function SelfDestruct()
-    RRR:Destroy() -- Deleta a GUI do loadstring
-    getgenv().RRR_Configs = nil -- Limpa as configs
-    script:Destroy() -- Para este script
-    warn("RRR HUB: Script e Interface encerrados.")
-end
+RunService.Heartbeat:Connect(function()
+    local cfg = getgenv().RRR_Config.Player
+    if not cfg then return end
 
-UIS.InputBegan:Connect(function(i, g)
-    -- Tecla P mata tudo, independente de estar digitando ou não
-    if i.KeyCode == Enum.KeyCode.P then
-        SelfDestruct()
-        return
+    -- Fake Flow (Efeito de Saturação e Bloom)
+    if cfg.FakeFlow then
+        ColorGrading.Enabled = true
+        ColorGrading.Saturation = 1.5
+        ColorGrading.Contrast = 0.5
+    elseif not cfg.FakeMetavision then
+        ColorGrading.Enabled = false
     end
 
-    if g then return end
-    
-    -- Atalho para esconder/mostrar (Z)
-    if i.KeyCode == Enum.KeyCode.Z and Drag then
-        Drag.Visible = not Drag.Visible
-    end
-
-    -- Binds de Jogo
-    local k = getgenv().RRR_Configs.Keys
-    if k["KeySteal"] and i.KeyCode == Enum.KeyCode[k["KeySteal"]:upper()] then 
-        executarAutoSteal() 
-    end
-    if k["KeyAutoGoal"] and i.KeyCode == Enum.KeyCode[k["KeyAutoGoal"]:upper()] then 
-        executarAutoGoal() 
+    -- Fake Metavision (Efeito Azulado e FOV)
+    if cfg.FakeMetavision then
+        ColorGrading.Enabled = true
+        ColorGrading.TintColor = Color3.fromRGB(150, 180, 255)
+        workspace.CurrentCamera.FieldOfView = 110
+    else
+        if not cfg.FakeFlow then ColorGrading.Enabled = false end
+        ColorGrading.TintColor = Color3.fromRGB(255, 255, 255)
     end
 end)
+
+-- // 4. DETECÇÃO DE BOTÕES (BINDS)
+UIS.InputBegan:Connect(function(input, processed)
+    if processed or IsTyping() then return end
+    
+    local cfg = getgenv().RRR_Config
+    
+    -- Bind Auto Goal
+    if input.KeyCode.Name == cfg.Misc.AutoGoal.Key then
+        executarAutoGoal()
+    end
+    
+    -- Bind Auto Steal
+    if input.KeyCode.Name == cfg.Misc.AutoSteal.Key then
+        executarAutoSteal()
+    end
+    
+    -- Bind Cancel Cutscene (Exemplo: Deleta câmeras locais de replay)
+    if input.KeyCode.Name == cfg.Player.CancelCutscene.Key then
+        local cam = workspace.CurrentCamera
+        if cam:FindFirstChild("CutsceneCamera") or #cam:GetChildren() > 0 then
+            cam:ClearAllChildren()
+            warn("Cutscene Cancelada!")
+        end
+    end
+end)
+
+-- Botão de Pânico (P) - Limpa tudo
+UIS.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.P then
+        ColorGrading:Destroy()
+        BlueSky:Destroy()
+        getgenv().RRR_Config = nil
+        if CoreGui:FindFirstChild("RRR_Hub") then CoreGui.RRR_Hub:Destroy() end
+        warn("RRR HUB Encerrado.")
+    end
+end)
+
+print("--- RRR HUB: Comandos.lua Rodando ---")
