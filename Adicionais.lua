@@ -1,4 +1,4 @@
--- // comandos.lua FINAL (PC + MOBILE + AUTO GOAL + STEAL INTELIGENTE)
+-- // comandos.lua FINAL COMPLETO
 
 -- // SERVICES
 local Players = game:GetService("Players")
@@ -58,7 +58,7 @@ local function checkBind(input, category, keyName)
     return false
 end
 
--- // AUTO STEAL (INTELIGENTE)
+-- // AUTO STEAL
 local function executarAutoSteal()
     local hrp, ball = getHRP(), getBall()
     if not (hrp and ball and Tackle) then return end
@@ -70,15 +70,12 @@ local function executarAutoSteal()
 
     local predictedPos = ball.Position + (ball.AssemblyLinearVelocity * 0.15)
 
-    -- TP inicial
     tpSeguro(predictedPos + Vector3.new(0, 2, 0))
 
-    -- spam tackle
     for i = 1, 50 do
         Tackle:FireServer()
     end
 
-    -- dash só se necessário
     if isFast then
         local start = tick()
         while ball and (tick() - start < 0.4) do
@@ -121,11 +118,14 @@ local function executarAutoGoal()
     )
 end
 
--- // POWERSHOT (HOLD REAL)
+-- // POWERSHOT (HOLD + 4x)
 local holding = false
 local holdStart = 0
 
 local function startHold()
+    local cfg = getCfg()
+    if not (cfg and cfg.Misc.PowerShot.Enabled) then return end
+
     holding = true
     holdStart = tick()
 end
@@ -138,15 +138,25 @@ local function endHold()
     holding = false
 
     local holdReq = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
+    if held < holdReq then return end
 
-    if held >= holdReq then
-        local hrp = getHRP()
-        if not hrp then return end
+    local hrp = getHRP()
+    if not hrp then return end
 
-        local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
-        local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
+    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
+    local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
 
-        Shoot:FireServer(pwr, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
+    -- DISPARA 4x
+    for i = 1, 4 do
+        Shoot:FireServer(
+            pwr,
+            dir,
+            dir,
+            hrp.Position,
+            cfg.Misc.PowerShot.Effect,
+            cfg.Misc.PowerShot.Effect2
+        )
+        task.wait(0.03)
     end
 end
 
@@ -154,24 +164,20 @@ end
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
 
-    -- AutoSteal
     if checkBind(input, "Misc", "AutoSteal") then
         executarAutoSteal()
     end
 
-    -- AutoGoal
     if checkBind(input, "Misc", "AutoGoal") then
         executarAutoGoal()
     end
 
-    -- PowerShot PC
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         startHold()
     end
 end)
 
 UIS.InputEnded:Connect(function(input)
-    -- PowerShot PC
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
         endHold()
     end
@@ -191,7 +197,7 @@ task.spawn(function()
     end
 end)
 
--- // LOOP PLAYER ATTRIBUTES
+-- LOOP ATTRIBUTES
 task.spawn(function()
     while task.wait(1) do
         local cfg = getCfg()
@@ -204,4 +210,4 @@ task.spawn(function()
     end
 end)
 
-print(">> [RRR] SISTEMA COMPLETO ATIVADO!")
+print(">> [RRR] SISTEMA FINAL ATIVO!")
