@@ -122,6 +122,36 @@ local function AddCheat(parent, text, category, configKey, hasBind)
     btn.Parent = frame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
 
+    -- Função de atualização visual (O CORAÇÃO DO PROBLEMA)
+    local function updateVisual()
+        local cfg = getgenv().RRR_Config[category][configKey]
+        local isEnabled = false
+        
+        if type(cfg) == "table" then
+            isEnabled = cfg.Enabled
+        else
+            isEnabled = cfg
+        end
+
+        btn.Text = isEnabled and "ON" or "OFF"
+        btn.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+    end
+
+    -- Clique do Botão (Lógica de Inversão Forçada)
+    btn.MouseButton1Click:Connect(function()
+        local current = getgenv().RRR_Config[category][configKey]
+        
+        if type(current) == "table" then
+            getgenv().RRR_Config[category][configKey].Enabled = not getgenv().RRR_Config[category][configKey].Enabled
+        else
+            getgenv().RRR_Config[category][configKey] = not current
+        end
+        
+        updateVisual()
+        Save()
+    end)
+
+    -- BIND (Opcional)
     if hasBind then
         local bindBtn = Instance.new("TextButton")
         bindBtn.Size = UDim2.new(0, 75, 0, 25)
@@ -133,42 +163,18 @@ local function AddCheat(parent, text, category, configKey, hasBind)
         Instance.new("UICorner", bindBtn)
 
         bindBtn.MouseButton1Click:Connect(function()
-            local old = bindBtn.Text
             bindBtn.Text = "..."
-            local input = UserInputService.InputBegan:Wait()
+            local input = game:GetService("UserInputService").InputBegan:Wait()
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 local kn = input.KeyCode.Name
-                if BlacklistedKeys[kn] then
-                    bindBtn.Text = "Bloqueado"; task.wait(1); bindBtn.Text = old
-                else
-                    getgenv().RRR_Config[category][configKey].Key = kn
-                    bindBtn.Text = kn; Save()
-                end
-            else
-                bindBtn.Text = old
+                getgenv().RRR_Config[category][configKey].Key = kn
+                bindBtn.Text = kn
+                Save()
             end
         end)
     end
 
-    local function update()
-        local val = getgenv().RRR_Config[category][configKey]
-        local isEnabled = (type(val) == "table") and val.Enabled or val
-        btn.Text = isEnabled and "ON" or "OFF"
-        btn.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        local target = getgenv().RRR_Config[category][configKey]
-        if type(target) == "table" then
-            target.Enabled = not target.Enabled
-        else
-            getgenv().RRR_Config[category][configKey] = not target
-        end
-        update()
-        Save()
-    end)
-    
-    update()
+    updateVisual()
 end
 
 local function AddPowerShot(parent)
