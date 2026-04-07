@@ -1,3 +1,6 @@
+-- // HubRRR.lua
+-- // Interface com Bloqueio de Teclas Duplicadas e Salvamento JSON
+
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -5,7 +8,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ConfigFile = "RRR_Settings.json"
 
--- // 1. CONFIGURAÇÕES E PERSISTÊNCIA (Garantindo Globais)
+-- // 1. CONFIGURAÇÕES E PERSISTÊNCIA
 local DefaultConfig = {
     Misc = {
         AutoGoal = {Enabled = false, Key = "G"},
@@ -19,7 +22,6 @@ local DefaultConfig = {
     }
 }
 
--- Inicializa a global se não existir
 if not getgenv().RRR_Config then
     getgenv().RRR_Config = DefaultConfig
 end
@@ -27,7 +29,7 @@ end
 local BlacklistedKeys = {
     ["W"] = true, ["A"] = true, ["S"] = true, ["D"] = true,
     ["Space"] = true, ["One"] = true, ["Two"] = true, 
-    ["Three"] = true, ["Four"] = true
+    ["Three"] = true, ["Four"] = true, ["Unknown"] = true
 }
 
 local function Save()
@@ -40,7 +42,6 @@ local function Load()
     if isfile and isfile(ConfigFile) then
         local s, decoded = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
         if s then
-            -- Merge profundo para não perder chaves novas
             for cat, content in pairs(decoded) do
                 if getgenv().RRR_Config[cat] then
                     for key, val in pairs(content) do 
@@ -57,9 +58,8 @@ Load()
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR_Hub"
 RRR.ResetOnSpawn = false
--- Tenta colocar no CoreGui para não sumir ao morrer, se falhar vai pro PlayerGui
-local success, err = pcall(function() RRR.Parent = CoreGui end)
-if not success then RRR.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+pcall(function() RRR.Parent = CoreGui end)
+if not RRR.Parent then RRR.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local Drag = Instance.new("ImageLabel")
 Drag.Size = UDim2.new(0, 520, 0, 350)
@@ -81,13 +81,11 @@ local function CreatePage()
     pg.Size = UDim2.new(1, -10, 1, -10)
     pg.BackgroundTransparency = 1
     pg.BorderSizePixel = 0
-    pg.ScrollBarThickness = 3
+    pg.ScrollBarThickness = 2
     pg.AutomaticCanvasSize = Enum.AutomaticSize.Y
     pg.Visible = false
     pg.Parent = Main
-    local layout = Instance.new("UIListLayout", pg)
-    layout.Padding = UDim.new(0, 8)
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    Instance.new("UIListLayout", pg).Padding = UDim.new(0, 8)
     return pg
 end
 
@@ -95,10 +93,10 @@ local MiscPage = CreatePage()
 local PlayerPage = CreatePage()
 MiscPage.Visible = true
 
--- // 3. COMPONENTES MELHORADOS
+-- // 3. FUNÇÃO DE CHEAT (COM BLOQUEIO DE KEY REPETIDA)
 local function AddCheat(parent, text, category, configKey, hasBind)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.95, 0, 0, 45)
+    frame.Size = UDim2.new(1, -5, 0, 45)
     frame.BackgroundColor3 = Color3.fromRGB(45, 65, 110)
     frame.BackgroundTransparency = 0.3
     frame.Parent = parent
@@ -110,108 +108,106 @@ local function AddCheat(parent, text, category, configKey, hasBind)
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.BackgroundTransparency = 1
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextSize = 18
+    label.TextSize = 17
     label.Font = Enum.Font.SourceSansBold
     label.Parent = frame
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 70, 0.7, 0)
-    btn.Position = UDim2.new(0.82, 0, 0.15, 0)
-    btn.TextScaled = true
+    btn.Size = UDim2.new(0, 65, 0, 25)
+    btn.Position = UDim2.new(0.85, 0, 0.22, 0)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Parent = frame
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", btn)
 
-    -- Função de atualização visual (O CORAÇÃO DO PROBLEMA)
-    local function updateVisual()
-        local cfg = getgenv().RRR_Config[category][configKey]
-        local isEnabled = false
-        
-        if type(cfg) == "table" then
-            isEnabled = cfg.Enabled
-        else
-            isEnabled = cfg
-        end
-
-        btn.Text = isEnabled and "ON" or "OFF"
-        btn.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+    local function update()
+        local data = getgenv().RRR_Config[category][configKey]
+        local active = (type(data) == "table") and data.Enabled or data
+        btn.Text = active and "ON" or "OFF"
+        btn.BackgroundColor3 = active and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
     end
 
-    -- Clique do Botão (Lógica de Inversão Forçada)
     btn.MouseButton1Click:Connect(function()
-        local current = getgenv().RRR_Config[category][configKey]
-        
-        if type(current) == "table" then
-            getgenv().RRR_Config[category][configKey].Enabled = not getgenv().RRR_Config[category][configKey].Enabled
-        else
-            getgenv().RRR_Config[category][configKey] = not current
-        end
-        
-        updateVisual()
+        local data = getgenv().RRR_Config[category][configKey]
+        if type(data) == "table" then data.Enabled = not data.Enabled else getgenv().RRR_Config[category][configKey] = not data end
+        update()
         Save()
     end)
 
-    -- BIND (Opcional)
     if hasBind then
-        local bindBtn = Instance.new("TextButton")
-        bindBtn.Size = UDim2.new(0, 75, 0, 25)
-        bindBtn.Position = UDim2.new(0.53, 0, 0.22, 0)
-        bindBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-        bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        bindBtn.Text = tostring(getgenv().RRR_Config[category][configKey].Key or "NONE")
-        bindBtn.Parent = frame
-        Instance.new("UICorner", bindBtn)
+        local bBtn = Instance.new("TextButton")
+        bBtn.Size = UDim2.new(0, 70, 0, 25)
+        bBtn.Position = UDim2.new(0.55, 0, 0.22, 0)
+        bBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+        bBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        bBtn.Text = getgenv().RRR_Config[category][configKey].Key or "NONE"
+        bBtn.Parent = frame
+        Instance.new("UICorner", bBtn)
 
-        bindBtn.MouseButton1Click:Connect(function()
-            bindBtn.Text = "..."
-            local input = game:GetService("UserInputService").InputBegan:Wait()
+        bBtn.MouseButton1Click:Connect(function()
+            local old = bBtn.Text
+            bBtn.Text = "..."
+            local input = UserInputService.InputBegan:Wait()
             if input.UserInputType == Enum.UserInputType.Keyboard then
-                local kn = input.KeyCode.Name
-                getgenv().RRR_Config[category][configKey].Key = kn
-                bindBtn.Text = kn
-                Save()
-            end
+                local newKey = input.KeyCode.Name
+                
+                -- Verificação de Duplicata
+                local emUso = false
+                for _, cat in pairs(getgenv().RRR_Config) do
+                    if type(cat) == "table" then
+                        for _, feat in pairs(cat) do
+                            if type(feat) == "table" and feat.Key == newKey then emUso = true break end
+                        end
+                    end
+                end
+
+                if BlacklistedKeys[newKey] then
+                    bBtn.Text = "BLOQUEADA"; task.wait(0.8); bBtn.Text = old
+                elseif emUso then
+                    bBtn.Text = "EM USO"; task.wait(0.8); bBtn.Text = old
+                else
+                    getgenv().RRR_Config[category][configKey].Key = newKey
+                    bBtn.Text = newKey
+                    Save()
+                end
+            else bBtn.Text = old end
         end)
     end
-
-    updateVisual()
+    update()
 end
 
 local function AddPowerShot(parent)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0.95, 0, 0, 145)
+    frame.Size = UDim2.new(1, -5, 0, 145)
     frame.BackgroundColor3 = Color3.fromRGB(45, 65, 110)
     frame.BackgroundTransparency = 0.3
     frame.Parent = parent
     Instance.new("UICorner", frame)
 
     local cheatLabel = Instance.new("TextLabel")
-    cheatLabel.Text = "  Power Shot Settings"
-    cheatLabel.Size = UDim2.new(0, 180, 0, 35)
+    cheatLabel.Text = "  Power Shot (Hold M2)"
+    cheatLabel.Size = UDim2.new(0, 200, 0, 35)
     cheatLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     cheatLabel.BackgroundTransparency = 1
     cheatLabel.Font = Enum.Font.SourceSansBold
-    cheatLabel.TextSize = 20
+    cheatLabel.TextSize = 19
     cheatLabel.TextXAlignment = Enum.TextXAlignment.Left
     cheatLabel.Parent = frame
 
-    -- Input de Força
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0, 45, 0, 25)
-    box.Position = UDim2.new(0.65, 0, 0.05, 0)
+    box.Size = UDim2.new(0, 40, 0, 22)
+    box.Position = UDim2.new(0.7, 0, 0.05, 0)
     box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    box.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.Power)
+    box.Text = getgenv().RRR_Config.Misc.PowerShot.Power
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
     box.Parent = frame
     Instance.new("UICorner", box)
     box.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.Power = box.Text; Save() end)
 
-    -- Input de Hold Time
     local box2 = Instance.new("TextBox")
-    box2.Size = UDim2.new(0, 45, 0, 25)
+    box2.Size = UDim2.new(0, 40, 0, 22)
     box2.Position = UDim2.new(0.85, 0, 0.05, 0)
     box2.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    box2.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.HoldTime)
+    box2.Text = getgenv().RRR_Config.Misc.PowerShot.HoldTime
     box2.TextColor3 = Color3.fromRGB(255, 255, 255)
     box2.Parent = frame
     Instance.new("UICorner", box2)
@@ -219,55 +215,26 @@ local function AddPowerShot(parent)
 
     local function CreateRow(txt, y, key)
         local r = Instance.new("Frame")
-        r.Size = UDim2.new(1, 0, 0, 30)
-        r.Position = UDim2.new(0, 0, 0, y)
-        r.BackgroundTransparency = 1
-        r.Parent = frame
-
-        local l = Instance.new("TextLabel")
-        l.Text = "    " .. txt
-        l.Size = UDim2.new(0.5, 0, 1, 0)
-        l.TextColor3 = Color3.fromRGB(220, 220, 220)
-        l.BackgroundTransparency = 1
-        l.TextXAlignment = Enum.TextXAlignment.Left
-        l.Parent = r
-
-        local buttons = {}
-        local function MkB(name, value, x)
-            local b = Instance.new("TextButton")
-            b.Size = UDim2.new(0, 60, 0, 25)
-            b.Position = UDim2.new(x, 0, 0.1, 0)
-            b.Text = name
-            b.TextColor3 = Color3.fromRGB(255, 255, 255)
-            b.Parent = r
-            Instance.new("UICorner", b)
-            
-            local function refresh()
-                local isSelected = (getgenv().RRR_Config.Misc.PowerShot[key] == value)
-                b.BackgroundColor3 = value and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-                b.BackgroundTransparency = isSelected and 0 or 0.6
-                b.BorderSizePixel = isSelected and 2 or 0
+        r.Size = UDim2.new(1, 0, 0, 30); r.Position = UDim2.new(0, 0, 0, y); r.BackgroundTransparency = 1; r.Parent = frame
+        local l = Instance.new("TextLabel"); l.Text = "    " .. txt; l.Size = UDim2.new(0.5, 0, 1, 0); l.TextColor3 = Color3.fromRGB(220, 220, 220); l.BackgroundTransparency = 1; l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = r
+        local function MkB(name, val, x)
+            local b = Instance.new("TextButton"); b.Size = UDim2.new(0, 55, 0, 22); b.Position = UDim2.new(x, 0, 0.1, 0); b.Text = name; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Parent = r; Instance.new("UICorner", b)
+            local function up() 
+                local isSel = (getgenv().RRR_Config.Misc.PowerShot[key] == val)
+                b.BackgroundColor3 = val and Color3.fromRGB(0, 130, 0) or Color3.fromRGB(130, 0, 0)
+                b.BackgroundTransparency = isSel and 0 or 0.6
             end
-
-            b.MouseButton1Click:Connect(function()
-                getgenv().RRR_Config.Misc.PowerShot[key] = value
-                Save()
-                -- Atualiza visualmente todos os botões da linha
-                for _, btnFunc in pairs(buttons) do btnFunc() end
-            end)
-            
-            table.insert(buttons, refresh)
-            refresh()
+            up()
+            b.MouseButton1Click:Connect(function() getgenv().RRR_Config.Misc.PowerShot[key] = val; Save(); for _,v in pairs(r:GetChildren()) do if v:IsA("TextButton") then v.BackgroundTransparency = 0.6 end end; b.BackgroundTransparency = 0 end)
         end
-        MkB("TRUE", true, 0.65)
-        MkB("FALSE", false, 0.82)
+        MkB("TRUE", true, 0.65); MkB("FALSE", false, 0.82)
     end
-    CreateRow("Status Principal:", 40, "Enabled")
+    CreateRow("Enabled Status:", 40, "Enabled")
     CreateRow("Apply Effect 1:", 75, "Effect")
     CreateRow("Apply Effect 2:", 110, "Effect2")
 end
 
--- // 4. MONTAGEM DAS PÁGINAS
+-- // 4. MONTAGEM
 AddPowerShot(MiscPage)
 AddCheat(MiscPage, "Auto Goal", "Misc", "AutoGoal", true)
 AddCheat(MiscPage, "Auto Steal", "Misc", "AutoSteal", true)
@@ -275,79 +242,22 @@ AddCheat(PlayerPage, "Cancel Cutscene", "Player", "CancelCutscene", true)
 AddCheat(PlayerPage, "Fake Flow", "Player", "FakeFlow", false)
 AddCheat(PlayerPage, "Fake Metavision", "Player", "FakeMetavision", false)
 
--- // 5. SIDEBAR E BARRA SUPERIOR
-local UpBar = Instance.new("ImageLabel", Drag)
-UpBar.Size = UDim2.new(1, 0, 0.22, 0)
-UpBar.Position = UDim2.new(0, 0, -0.08, 0)
-UpBar.Image = "rbxassetid://74857124519074"
-UpBar.BackgroundTransparency = 1
-
-local Title = Instance.new("TextLabel", UpBar)
-Title.Text = "R.R.R HUB · Meta Lock"
-Title.Position = UDim2.new(0.05, 0, 0.2, 0)
-Title.Size = UDim2.new(0.8, 0, 0.6, 0)
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.BackgroundTransparency = 1
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 25
-Title.TextXAlignment = Enum.TextXAlignment.Left
-
-local CloseBtn = Instance.new("ImageButton", UpBar)
-CloseBtn.Size = UDim2.new(0, 30, 0, 25)
-CloseBtn.Position = UDim2.new(0.9, 0, 0.3, 0)
-CloseBtn.Image = "rbxassetid://138567149317610"
-CloseBtn.BackgroundTransparency = 1
-CloseBtn.MouseButton1Click:Connect(function() Drag.Visible = false end)
-
-local Side = Instance.new("Frame", Drag)
-Side.Size = UDim2.new(0.15, 0, 0.5, 0)
-Side.Position = UDim2.new(0.02, 0, 0.18, 0)
-Side.BackgroundTransparency = 1
-local sideLayout = Instance.new("UIListLayout", Side)
-sideLayout.Padding = UDim.new(0, 10)
-
+-- // 5. SIDEBAR E TABS
+local Side = Instance.new("Frame", Drag); Side.Size = UDim2.new(0.15, 0, 0.5, 0); Side.Position = UDim2.new(0.02, 0, 0.18, 0); Side.BackgroundTransparency = 1
+Instance.new("UIListLayout", Side).Padding = UDim.new(0, 10)
 local function MakeTab(t, p)
-    local b = Instance.new("TextButton", Side)
-    b.Size = UDim2.new(1, 0, 0, 35)
-    b.BackgroundTransparency = 0.8
-    b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    b.Text = t
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.Font = Enum.Font.SourceSansBold
-    b.TextSize = 20
-    Instance.new("UICorner", b)
-    
-    b.MouseButton1Click:Connect(function() 
-        MiscPage.Visible = (p == MiscPage)
-        PlayerPage.Visible = (p == PlayerPage) 
-    end)
+    local b = Instance.new("TextButton", Side); b.Size = UDim2.new(1, 0, 0, 30); b.Text = t; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Font = Enum.Font.SourceSansBold; b.TextSize = 18; b.BackgroundTransparency = 0.8; b.BackgroundColor3 = Color3.fromRGB(255,255,255); Instance.new("UICorner", b)
+    b.MouseButton1Click:Connect(function() MiscPage.Visible = (p == MiscPage); PlayerPage.Visible = (p == PlayerPage) end)
 end
-MakeTab("Misc", MiscPage)
-MakeTab("Player", PlayerPage)
+MakeTab("Misc", MiscPage); MakeTab("Player", PlayerPage)
 
--- // 6. LOGICA DE ARRASTAR E TOGGLE (Tecla Z)
-UserInputService.InputBegan:Connect(function(i, g) 
-    if not g and i.KeyCode == Enum.KeyCode.Z then 
-        Drag.Visible = not Drag.Visible 
-    end 
-end)
-
+-- // 6. DRAG E TOGGLE (Z)
+UserInputService.InputBegan:Connect(function(i, g) if not g and i.KeyCode == Enum.KeyCode.Z then Drag.Visible = not Drag.Visible end end)
 local dS, sP, dragging
-Drag.InputBegan:Connect(function(i) 
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
-        dragging = true; dS = i.Position; sP = Drag.Position 
-    end 
-end)
-UserInputService.InputChanged:Connect(function(i) 
-    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = i.Position - dS
-        Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
-    end 
-end)
-UserInputService.InputEnded:Connect(function(i) 
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
-        dragging = false 
-    end 
-end)
+Drag.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dS = i.Position; sP = Drag.Position end end)
+UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+    local delta = i.Position - dS; Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
+end end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
 
-print("✅ RRR Hub carregada com sistema de sincronia ativa!")
+print("✅ RRR Hub Completa: Bloqueio de duplicatas e JSON salvando!")
