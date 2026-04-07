@@ -1,6 +1,4 @@
--- // HubRRR.lua
--- // Interface com Bloqueio de Teclas Duplicadas e Salvamento JSON
-
+-- // HubRRR.lua (Apenas adição do Informativo Mobile)
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -69,6 +67,25 @@ Drag.BackgroundTransparency = 1
 Drag.Active = true
 Drag.Parent = RRR
 
+-- // [NOVO] TEXTO INFORMATIVO MOBILE (Adicionado sem mudar a UI)
+local MobileInfo = Instance.new("TextLabel")
+MobileInfo.Name = "MobileInfo"
+MobileInfo.Size = UDim2.new(0.7, 0, 0.08, 0)
+MobileInfo.Position = UDim2.new(0.22, 0, 0.05, 0)
+MobileInfo.BackgroundTransparency = 1
+MobileInfo.TextColor3 = Color3.fromRGB(0, 255, 255)
+MobileInfo.Font = Enum.Font.SourceSansItalic
+MobileInfo.TextScaled = true
+MobileInfo.TextStrokeTransparency = 0.5
+MobileInfo.Visible = false -- Fica invisível por padrão
+MobileInfo.Parent = Drag
+
+-- Lógica para detectar Mobile e definir o texto
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+    MobileInfo.Visible = true
+    MobileInfo.Text = "📱 Mobile Detectado: Use os botões da tela (Tackle/Talent/Shoot)"
+end
+
 local Main = Instance.new("ImageLabel")
 Main.Size = UDim2.new(0.78, 0, 0.82, 0)
 Main.Position = UDim2.new(0.18, 0, 0.14, 0)
@@ -93,7 +110,7 @@ local MiscPage = CreatePage()
 local PlayerPage = CreatePage()
 MiscPage.Visible = true
 
--- // 3. FUNÇÃO DE CHEAT (COM BLOQUEIO DE KEY REPETIDA)
+-- // 3. COMPONENTES (Ajustado para texto dinâmico no Bind)
 local function AddCheat(parent, text, category, configKey, hasBind)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -5, 0, 45)
@@ -139,18 +156,30 @@ local function AddCheat(parent, text, category, configKey, hasBind)
         bBtn.Position = UDim2.new(0.55, 0, 0.22, 0)
         bBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
         bBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        bBtn.Text = getgenv().RRR_Config[category][configKey].Key or "NONE"
         bBtn.Parent = frame
         Instance.new("UICorner", bBtn)
 
+        -- [NOVO] Função para mostrar botão em vez de tecla no mobile
+        local function refreshBindText()
+            if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+                if configKey == "AutoGoal" then bBtn.Text = "TALENT"
+                elseif configKey == "AutoSteal" then bBtn.Text = "TACKLE"
+                else bBtn.Text = "BTN" end
+                bBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
+            else
+                bBtn.Text = getgenv().RRR_Config[category][configKey].Key or "NONE"
+            end
+        end
+
         bBtn.MouseButton1Click:Connect(function()
+            if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+                return -- Mobile não altera Keybind manualmente
+            end
             local old = bBtn.Text
             bBtn.Text = "..."
             local input = UserInputService.InputBegan:Wait()
             if input.UserInputType == Enum.UserInputType.Keyboard then
                 local newKey = input.KeyCode.Name
-                
-                -- Verificação de Duplicata
                 local emUso = false
                 for _, cat in pairs(getgenv().RRR_Config) do
                     if type(cat) == "table" then
@@ -159,7 +188,6 @@ local function AddCheat(parent, text, category, configKey, hasBind)
                         end
                     end
                 end
-
                 if BlacklistedKeys[newKey] then
                     bBtn.Text = "BLOQUEADA"; task.wait(0.8); bBtn.Text = old
                 elseif emUso then
@@ -171,6 +199,7 @@ local function AddCheat(parent, text, category, configKey, hasBind)
                 end
             else bBtn.Text = old end
         end)
+        refreshBindText()
     end
     update()
 end
@@ -259,5 +288,3 @@ UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputTyp
     local delta = i.Position - dS; Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
 end end)
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
-
-print("✅ RRR Hub Completa: Bloqueio de duplicatas e JSON salvando!")
