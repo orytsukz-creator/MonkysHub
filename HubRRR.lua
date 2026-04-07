@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ConfigFile = "RRR_Settings.json"
 
--- // 1. CONFIGURAÇÕES E PERSISTÊNCIA (Ajustado para sincronia)
+-- // 1. CONFIGURAÇÕES E PERSISTÊNCIA (Garantindo Globais)
 local DefaultConfig = {
     Misc = {
         AutoGoal = {Enabled = false, Key = "G"},
@@ -18,7 +18,11 @@ local DefaultConfig = {
         FakeMetavision = false
     }
 }
-getgenv().RRR_Config = DefaultConfig
+
+-- Inicializa a global se não existir
+if not getgenv().RRR_Config then
+    getgenv().RRR_Config = DefaultConfig
+end
 
 local BlacklistedKeys = {
     ["W"] = true, ["A"] = true, ["S"] = true, ["D"] = true,
@@ -27,16 +31,21 @@ local BlacklistedKeys = {
 }
 
 local function Save()
-    if writefile then writefile(ConfigFile, HttpService:JSONEncode(getgenv().RRR_Config)) end
+    if writefile then 
+        writefile(ConfigFile, HttpService:JSONEncode(getgenv().RRR_Config)) 
+    end
 end
 
 local function Load()
     if isfile and isfile(ConfigFile) then
         local s, decoded = pcall(function() return HttpService:JSONDecode(readfile(ConfigFile)) end)
         if s then
+            -- Merge profundo para não perder chaves novas
             for cat, content in pairs(decoded) do
                 if getgenv().RRR_Config[cat] then
-                    for key, val in pairs(content) do getgenv().RRR_Config[cat][key] = val end
+                    for key, val in pairs(content) do 
+                        getgenv().RRR_Config[cat][key] = val 
+                    end
                 end
             end
         end
@@ -44,10 +53,13 @@ local function Load()
 end
 Load()
 
--- // 2. ESTRUTURA DA INTERFACE (MANTIDA ORIGINAL)
+-- // 2. ESTRUTURA DA INTERFACE
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR_Hub"
-RRR.Parent = CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+RRR.ResetOnSpawn = false
+-- Tenta colocar no CoreGui para não sumir ao morrer, se falhar vai pro PlayerGui
+local success, err = pcall(function() RRR.Parent = CoreGui end)
+if not success then RRR.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local Drag = Instance.new("ImageLabel")
 Drag.Size = UDim2.new(0, 520, 0, 350)
@@ -73,7 +85,9 @@ local function CreatePage()
     pg.AutomaticCanvasSize = Enum.AutomaticSize.Y
     pg.Visible = false
     pg.Parent = Main
-    Instance.new("UIListLayout", pg).Padding = UDim.new(0, 8)
+    local layout = Instance.new("UIListLayout", pg)
+    layout.Padding = UDim.new(0, 8)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     return pg
 end
 
@@ -81,10 +95,10 @@ local MiscPage = CreatePage()
 local PlayerPage = CreatePage()
 MiscPage.Visible = true
 
--- // 3. COMPONENTES (MANTIDOS ORIGINAIS)
+-- // 3. COMPONENTES MELHORADOS
 local function AddCheat(parent, text, category, configKey, hasBind)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -5, 0, 45)
+    frame.Size = UDim2.new(0.95, 0, 0, 45)
     frame.BackgroundColor3 = Color3.fromRGB(45, 65, 110)
     frame.BackgroundTransparency = 0.3
     frame.Parent = parent
@@ -97,6 +111,7 @@ local function AddCheat(parent, text, category, configKey, hasBind)
     label.BackgroundTransparency = 1
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextSize = 18
+    label.Font = Enum.Font.SourceSansBold
     label.Parent = frame
 
     local btn = Instance.new("TextButton")
@@ -113,8 +128,7 @@ local function AddCheat(parent, text, category, configKey, hasBind)
         bindBtn.Position = UDim2.new(0.53, 0, 0.22, 0)
         bindBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
         bindBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        local currentKey = getgenv().RRR_Config[category][configKey].Key or "NONE"
-        bindBtn.Text = tostring(currentKey)
+        bindBtn.Text = tostring(getgenv().RRR_Config[category][configKey].Key or "NONE")
         bindBtn.Parent = frame
         Instance.new("UICorner", bindBtn)
 
@@ -130,53 +144,44 @@ local function AddCheat(parent, text, category, configKey, hasBind)
                     getgenv().RRR_Config[category][configKey].Key = kn
                     bindBtn.Text = kn; Save()
                 end
+            else
+                bindBtn.Text = old
             end
         end)
     end
 
-local function update()
+    local function update()
         local val = getgenv().RRR_Config[category][configKey]
-        if type(val) == "table" then val = val.Enabled end
-        
-        btn.Text = val and "ON" or "OFF"
-        btn.BackgroundColor3 = val and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+        local isEnabled = (type(val) == "table") and val.Enabled or val
+        btn.Text = isEnabled and "ON" or "OFF"
+        btn.BackgroundColor3 = isEnabled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
     end
 
     btn.MouseButton1Click:Connect(function()
-        local d = getgenv().RRR_Config[category][configKey]
-        
-        -- MUDA O VALOR NA TABELA GLOBAL AQUI
-        if type(d) == "table" then 
-            getgenv().RRR_Config[category][configKey].Enabled = not d.Enabled 
-        else 
-            getgenv().RRR_Config[category][configKey] = not d 
+        local target = getgenv().RRR_Config[category][configKey]
+        if type(target) == "table" then
+            target.Enabled = not target.Enabled
+        else
+            getgenv().RRR_Config[category][configKey] = not target
         end
-        
-        update() 
-        Save() -- Salva no JSON
-        print(text .. " mudou para: " .. tostring(getgenv().RRR_Config[category][configKey]))
+        update()
+        Save()
     end)
     
     update()
-
-    btn.MouseButton1Click:Connect(function()
-        local d = getgenv().RRR_Config[category][configKey]
-        if type(d) == "table" then d.Enabled = not d.Enabled else getgenv().RRR_Config[category][configKey] = not d end
-        update(); Save()
-    end)
 end
 
 local function AddPowerShot(parent)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -5, 0, 145)
+    frame.Size = UDim2.new(0.95, 0, 0, 145)
     frame.BackgroundColor3 = Color3.fromRGB(45, 65, 110)
     frame.BackgroundTransparency = 0.3
     frame.Parent = parent
     Instance.new("UICorner", frame)
 
     local cheatLabel = Instance.new("TextLabel")
-    cheatLabel.Text = "  Power Shot"
-    cheatLabel.Size = UDim2.new(0, 150, 0, 35)
+    cheatLabel.Text = "  Power Shot Settings"
+    cheatLabel.Size = UDim2.new(0, 180, 0, 35)
     cheatLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     cheatLabel.BackgroundTransparency = 1
     cheatLabel.Font = Enum.Font.SourceSansBold
@@ -184,25 +189,23 @@ local function AddPowerShot(parent)
     cheatLabel.TextXAlignment = Enum.TextXAlignment.Left
     cheatLabel.Parent = frame
 
+    -- Input de Força
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(0, 45, 0, 25)
     box.Position = UDim2.new(0.65, 0, 0.05, 0)
     box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    -- Correção do erro de string: se for nil, usa o padrão
-    box.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.Power or "230")
-    box.PlaceholderText = "Force"
+    box.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.Power)
     box.TextColor3 = Color3.fromRGB(255, 255, 255)
     box.Parent = frame
     Instance.new("UICorner", box)
     box.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.Power = box.Text; Save() end)
 
+    -- Input de Hold Time
     local box2 = Instance.new("TextBox")
     box2.Size = UDim2.new(0, 45, 0, 25)
     box2.Position = UDim2.new(0.85, 0, 0.05, 0)
     box2.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    -- Correção do erro de string: se for nil, usa o padrão
-    box2.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.HoldTime or "0.47")
-    box2.PlaceholderText = "Hold"
+    box2.Text = tostring(getgenv().RRR_Config.Misc.PowerShot.HoldTime)
     box2.TextColor3 = Color3.fromRGB(255, 255, 255)
     box2.Parent = frame
     Instance.new("UICorner", box2)
@@ -214,6 +217,7 @@ local function AddPowerShot(parent)
         r.Position = UDim2.new(0, 0, 0, y)
         r.BackgroundTransparency = 1
         r.Parent = frame
+
         local l = Instance.new("TextLabel")
         l.Text = "    " .. txt
         l.Size = UDim2.new(0.5, 0, 1, 0)
@@ -221,6 +225,8 @@ local function AddPowerShot(parent)
         l.BackgroundTransparency = 1
         l.TextXAlignment = Enum.TextXAlignment.Left
         l.Parent = r
+
+        local buttons = {}
         local function MkB(name, value, x)
             local b = Instance.new("TextButton")
             b.Size = UDim2.new(0, 60, 0, 25)
@@ -229,22 +235,28 @@ local function AddPowerShot(parent)
             b.TextColor3 = Color3.fromRGB(255, 255, 255)
             b.Parent = r
             Instance.new("UICorner", b)
-            local function up()
-                local isActive = (getgenv().RRR_Config.Misc.PowerShot[key] == value)
+            
+            local function refresh()
+                local isSelected = (getgenv().RRR_Config.Misc.PowerShot[key] == value)
                 b.BackgroundColor3 = value and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-                b.BackgroundTransparency = isActive and 0 or 0.7
+                b.BackgroundTransparency = isSelected and 0 or 0.6
+                b.BorderSizePixel = isSelected and 2 or 0
             end
-            up()
-            b.MouseButton1Click:Connect(function() 
+
+            b.MouseButton1Click:Connect(function()
                 getgenv().RRR_Config.Misc.PowerShot[key] = value
                 Save()
-                for _,v in pairs(r:GetChildren()) do if v:IsA("TextButton") then v.BackgroundTransparency = 0.7 end end
-                b.BackgroundTransparency = 0
+                -- Atualiza visualmente todos os botões da linha
+                for _, btnFunc in pairs(buttons) do btnFunc() end
             end)
+            
+            table.insert(buttons, refresh)
+            refresh()
         end
-        MkB("TRUE", true, 0.65); MkB("FALSE", false, 0.82)
+        MkB("TRUE", true, 0.65)
+        MkB("FALSE", false, 0.82)
     end
-    CreateRow("Enabled Status:", 40, "Enabled")
+    CreateRow("Status Principal:", 40, "Enabled")
     CreateRow("Apply Effect 1:", 75, "Effect")
     CreateRow("Apply Effect 2:", 110, "Effect2")
 end
@@ -257,7 +269,7 @@ AddCheat(PlayerPage, "Cancel Cutscene", "Player", "CancelCutscene", true)
 AddCheat(PlayerPage, "Fake Flow", "Player", "FakeFlow", false)
 AddCheat(PlayerPage, "Fake Metavision", "Player", "FakeMetavision", false)
 
--- // 5. SIDEBAR, TABS E BARRA SUPERIOR
+-- // 5. SIDEBAR E BARRA SUPERIOR
 local UpBar = Instance.new("ImageLabel", Drag)
 UpBar.Size = UDim2.new(1, 0, 0.22, 0)
 UpBar.Position = UDim2.new(0, 0, -0.08, 0)
@@ -285,33 +297,51 @@ local Side = Instance.new("Frame", Drag)
 Side.Size = UDim2.new(0.15, 0, 0.5, 0)
 Side.Position = UDim2.new(0.02, 0, 0.18, 0)
 Side.BackgroundTransparency = 1
-Instance.new("UIListLayout", Side).Padding = UDim.new(0, 10)
+local sideLayout = Instance.new("UIListLayout", Side)
+sideLayout.Padding = UDim.new(0, 10)
 
 local function MakeTab(t, p)
     local b = Instance.new("TextButton", Side)
     b.Size = UDim2.new(1, 0, 0, 35)
-    b.BackgroundTransparency = 1
+    b.BackgroundTransparency = 0.8
+    b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     b.Text = t
     b.TextColor3 = Color3.fromRGB(255, 255, 255)
     b.Font = Enum.Font.SourceSansBold
-    b.TextSize = 22
+    b.TextSize = 20
+    Instance.new("UICorner", b)
+    
     b.MouseButton1Click:Connect(function() 
         MiscPage.Visible = (p == MiscPage)
         PlayerPage.Visible = (p == PlayerPage) 
     end)
 end
-MakeTab("Misc", MiscPage); MakeTab("Player", PlayerPage)
+MakeTab("Misc", MiscPage)
+MakeTab("Player", PlayerPage)
 
--- // 6. LOGICA DE ARRASTAR E TOGGLE
-local function Toggle() Drag.Visible = not Drag.Visible end
-UserInputService.InputBegan:Connect(function(i, g) if not g and i.KeyCode == Enum.KeyCode.Z then Toggle() end end)
+-- // 6. LOGICA DE ARRASTAR E TOGGLE (Tecla Z)
+UserInputService.InputBegan:Connect(function(i, g) 
+    if not g and i.KeyCode == Enum.KeyCode.Z then 
+        Drag.Visible = not Drag.Visible 
+    end 
+end)
 
 local dS, sP, dragging
-Drag.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dS = i.Position; sP = Drag.Position end end)
-UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-    local delta = i.Position - dS
-    Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
-end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+Drag.InputBegan:Connect(function(i) 
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
+        dragging = true; dS = i.Position; sP = Drag.Position 
+    end 
+end)
+UserInputService.InputChanged:Connect(function(i) 
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - dS
+        Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
+    end 
+end)
+UserInputService.InputEnded:Connect(function(i) 
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then 
+        dragging = false 
+    end 
+end)
 
-print("RRR Hub: Sincronizada com Sucesso!")
+print("✅ RRR Hub carregada com sistema de sincronia ativa!")
