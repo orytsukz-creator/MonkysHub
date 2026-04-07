@@ -10,13 +10,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Verifica se a config da UI existe
+-- // Função para ler a tabela da UI
 local function getCfg()
     return getgenv().RRR_Config
 end
 
 -- ==========================================
--- REMOTES E CONFIGS
+-- REMOTES E CONFIGS DE POSIÇÃO
 -- ==========================================
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
@@ -32,7 +32,8 @@ local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
 -- FUNÇÕES BASE
 -- ==========================================
 local function getHRP()
-    return player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
 end
 
 local function getBall()
@@ -42,14 +43,14 @@ end
 local function tpSeguro(pos)
     local hrp = getHRP()
     if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
         hrp.CFrame = CFrame.new(pos)
     end
 end
 
 -- ==========================================
--- LÓGICA DE CHUTE (DIR ABSURDO)
+-- LÓGICA DE CHUTE FORTE (USADO NO M2)
 -- ==========================================
 local function chuteForte()
     local hrp = getHRP()
@@ -62,14 +63,14 @@ local function chuteForte()
 
     local dir = (
         camera.CFrame.LookVector * 310000 +
-        (camera.CFrame.LookVector + Vector3.new(0,.14,0)) * 10000000
+        (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000
     ).Unit
 
     Shoot:FireServer(pwr, dir, dir, hrp.Position, eff1, eff2)
 end
 
 -- ==========================================
--- AUTO GOL (ALTURA PROGRESSIVA)
+-- AUTO GOL (SISTEMA DE ALTURA PROGRESSIVA)
 -- ==========================================
 local function chuteAutoGol()
     local hrp = getHRP()
@@ -93,6 +94,7 @@ local function chuteAutoGol()
     local dist = delta.Magnitude
     local horizontal = Vector3.new(delta.X, 0, delta.Z).Unit
 
+    -- Cálculo de Altura Progressiva (0.14 base)
     local altura
     if dist < 60 then
         altura = -1
@@ -104,6 +106,14 @@ local function chuteAutoGol()
         altura = dist * mult
     end
 
+    -- Correção no Ar
+    local alturaDoChao = hrp.Position.Y + 25
+    if alturaDoChao > 0 then
+        local reducao = 1 - math.clamp((alturaDoChao / 20), 0, 0.7)
+        local fatorDist = math.clamp(dist / 100, 0.3, 1)
+        altura = altura * reducao * fatorDist
+    end
+
     local dir = (horizontal + Vector3.new(0, altura / dist, 0)).Unit
     local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
 
@@ -111,7 +121,7 @@ local function chuteAutoGol()
 end
 
 -- ==========================================
--- INPUTS (Sincronizado com Binds da UI)
+-- INPUTS (CONECTADOS AOS BINDS DA UI)
 -- ==========================================
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
@@ -119,44 +129,57 @@ UIS.InputBegan:Connect(function(input, processed)
     if not cfg then return end
 
     local hrp = getHRP()
-    if not hrp then return end
 
-    -- AUTO STEAL (Bind da UI)
-    if input.KeyCode == Enum.KeyCode[cfg.Misc.AutoSteal.Key:upper()] and cfg.Misc.AutoSteal.Enabled then
+    -- AUTO STEAL (Lógica J com retorno ao pegar)
+    local keySteal = cfg.Misc.AutoSteal.Key:upper()
+    if input.KeyCode == Enum.KeyCode[keySteal] and cfg.Misc.AutoSteal.Enabled then
         task.spawn(function()
             local ball = getBall()
-            if not ball or ball:GetAttribute("State") == player.Name then return end
+            if not ball then return end
+            
+            local state = ball:GetAttribute("State")
+            if state == "UNTOUCHABLE" or state == player.Name then return end
 
             local oldPos = hrp.CFrame
             Tackle:FireServer()
-            local start = tick()
+
+            local startTime = tick()
             local deuTackle = false
 
-            while ball and ball.Parent and tick() - start < 1.2 do
-                local state = ball:GetAttribute("State")
-                if state == "UNTOUCHABLE" then deuTackle = true; break end
-                if state == player.Name then break end
+            while ball and ball.Parent and tick() - startTime < 1.2 do
+                local currentState = ball:GetAttribute("State")
+                if currentState == "UNTOUCHABLE" then deuTackle = true; break end
+                if currentState == player.Name then break end
 
                 tpSeguro(ball.Position + Vector3.new(0, 2, 0))
+                
                 if ball.AssemblyLinearVelocity.Magnitude > 5 then
                     hrp.AssemblyLinearVelocity = ball.AssemblyLinearVelocity.Unit * 90
                 end
                 task.wait(0.03)
             end
-            if deuTackle then task.wait(0.05); tpSeguro(oldPos.Position) end
+
+            if deuTackle then
+                task.wait(0.05)
+                tpSeguro(oldPos.Position)
+            end
         end)
     end
 
-    -- AUTO GOAL COMBO (Bind da UI)
-    if input.KeyCode == Enum.KeyCode[cfg.Misc.AutoGoal.Key:upper()] and cfg.Misc.AutoGoal.Enabled then
+    -- AUTO GOAL COMBO (Lógica U com TP para baliza)
+    local keyGoal = cfg.Misc.AutoGoal.Key:upper()
+    if input.KeyCode == Enum.KeyCode[keyGoal] and cfg.Misc.AutoGoal.Enabled then
         task.spawn(function()
             local ball = getBall()
             if not ball then return end
+
             tpSeguro(ball.Position + Vector3.new(0, 2, 0))
             Tackle:FireServer()
             task.wait(0.2)
-            local alvoTP = (player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
+
+            local alvoTP = (player.Team and player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
             tpSeguro(alvoTP)
+
             task.wait(0.8)
             chuteAutoGol()
         end)
@@ -164,7 +187,7 @@ UIS.InputBegan:Connect(function(input, processed)
 end)
 
 -- ==========================================
--- SISTEMA M2 (HOLD DA UI)
+-- SISTEMA M2 (MOUSE 2) COM HOLD TIME DA UI
 -- ==========================================
 local segurandoM2 = false
 local tempoM2 = 0
@@ -185,7 +208,10 @@ CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
             if disparoPendente then return end
             disparoPendente = true
             task.delay(0.01, function()
-                for i = 1, 4 do chuteForte(); task.wait() end
+                for i = 1, 4 do
+                    chuteForte()
+                    task.wait()
+                end
                 disparoPendente = false
             end)
         end
@@ -194,17 +220,17 @@ CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
 -- ==========================================
--- LOOP FLOW / METAVISION
+-- LOOP PARA ATRIBUTOS (FLOW / METAVISION)
 -- ==========================================
 task.spawn(function()
     while true do
-        task.wait(1)
         local cfg = getCfg()
         if cfg then
             if cfg.Player.FakeFlow then player:SetAttribute("Flow", true) end
             if cfg.Player.FakeMetavision then player:SetAttribute("Metavision", true) end
         end
+        task.wait(0.5)
     end
 end)
 
-print("✅ RRR_Comandos: Sincronizado com a UI!")
+print("✅ comandos.lua: Totalmente sincronizado com a Interface!")
