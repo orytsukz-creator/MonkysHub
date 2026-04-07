@@ -1,14 +1,17 @@
--- // comandos.lua (PURO ASCII - SEM ERROS UNICODE)
+-- // comandos.lua (CLEAN ASCII - MAGNITUDE > 10)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // 1. AGUARDAR REMOTES
+-- // 1. AGUARDAR DEPENDENCIAS
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes", 20)
 local Tackle = Remotes and Remotes:WaitForChild("Tackle", 10)
+
+-- Espera a Hub carregar para nao dar erro de Nil Value
+repeat task.wait() until getgenv().RRR_Config
 
 -- // 2. POSICOES
 local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
@@ -43,17 +46,26 @@ local function executarAutoSteal()
     if not hrp or not cfg or not ball or not Tackle then return end
     if ball:GetAttribute("State") == player.Name then return end
     
-    local oldPos = hrp.CFrame
-    Tackle:FireServer()
-    local start = tick()
-    local pegou = false
-    while ball and tick() - start < 1.2 do
-        local st = ball:GetAttribute("State")
-        if st == "UNTOUCHABLE" or st == player.Name then pegou = true; break end
-        tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-        task.wait(0.03)
+    -- [MELHORIA: DASH APENAS SE DISTANCIA > 10]
+    local distancia = (hrp.Position - ball.Position).Magnitude
+    
+    if distancia > 10 then
+        local oldPos = hrp.CFrame
+        Tackle:FireServer()
+        local start = tick()
+        local pegou = false
+        
+        while ball and tick() - start < 1.2 do
+            local st = ball:GetAttribute("State")
+            if st == "UNTOUCHABLE" or st == player.Name then pegou = true; break end
+            tpSeguro(ball.Position + Vector3.new(0, 2, 0))
+            task.wait(0.03)
+        end
+        if pegou then task.wait(0.05); tpSeguro(oldPos.Position) end
+    else
+        -- Se estiver perto, apenas solta o Tackle normal sem dar o TP
+        Tackle:FireServer()
     end
-    if pegou then task.wait(0.05); tpSeguro(oldPos.Position) end
 end
 
 local function executarAutoGoal()
@@ -98,7 +110,7 @@ local function checkBind(input, category, key)
     return false
 end
 
--- // 5. EVENTOS DE INPUT
+-- // 5. EVENTOS
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     if checkBind(input, "Misc", "AutoSteal") then executarAutoSteal()
@@ -128,7 +140,7 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- // 6. LOOP DE ATRIBUTOS
+-- // 6. LOOP ATRIBUTOS
 task.spawn(function()
     while task.wait(0.5) do
         local cfg = getCfg()
