@@ -1,251 +1,145 @@
--- // comandos.lua
--- // VERSÃO FINAL: SINCRONIA TOTAL COM RRR_HUB
-
+-- // comandos.lua (VERSÃO FINAL: PC + MOBILE + COOLDOWN SELETIVO)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local CAS = game:GetService("ContextActionService")
-local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // Função mestre de sincronia
-local function getCfg()
-    return getgenv().RRR_Config
-end
-
--- ==========================================
--- REMOTES E POSIÇÕES (ESTÁTICO)
--- ==========================================
+-- // REMOTES E POSIÇÕES
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
+local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
+local TRAVE_BLUE_1, TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1010), Vector3.new(-2202, -25, 1047)
+local GOAL_TP_RED, GOAL_TP_BLUE = Vector3.new(-2848, -25, 1030), Vector3.new(-2261, -25, 1030)
 
-local TRAVE_RED_1 = Vector3.new(-2907, -25, 1010)
-local TRAVE_RED_2 = Vector3.new(-2907, -25, 1047)
-local TRAVE_BLUE_1 = Vector3.new(-2202, -25, 1010)
-local TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1047)
-local GOAL_TP_RED = Vector3.new(-2848, -25, 1030)
-local GOAL_TP_BLUE = Vector3.new(-2261, -25, 1030)
+-- // VARIÁVEIS DE CONTROLE
+local lastMobileTackle = 0
+local tackleCooldown = 2
+local disparoPendente = false
 
--- ==========================================
--- FUNÇÕES DE UTILIDADE
--- ==========================================
-local function getHRP()
-    local char = player.Character or player.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
-end
-
-local function getBall()
-    return workspace:FindFirstChild("Ball")
-end
+local function getCfg() return getgenv().RRR_Config end
+local function getHRP() return player.Character and player.Character:FindFirstChild("HumanoidRootPart") end
+local function getBall() return workspace:FindFirstChild("Ball") end
 
 local function tpSeguro(pos)
     local hrp = getHRP()
     if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.AssemblyLinearVelocity, hrp.AssemblyAngularVelocity = Vector3.zero, Vector3.zero
         hrp.CFrame = CFrame.new(pos)
     end
 end
 
--- ==========================================
--- LÓGICA DE CHUTE (POWER SHOT)
--- ==========================================
+-- // LÓGICAS DE EXECUÇÃO
 local function executarChuteForte()
-    local hrp = getHRP()
-    local cfg = getCfg()
+    local hrp, cfg = getHRP(), getCfg()
     if not hrp or not cfg then return end
-
-    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local eff1 = cfg.Misc.PowerShot.Effect
-    local eff2 = cfg.Misc.PowerShot.Effect2
-
-    -- Direção "Absurda" solicitada
-    local dir = (
-        camera.CFrame.LookVector * 310000 +
-        (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000
-    ).Unit
-
-    Shoot:FireServer(pwr, dir, dir, hrp.Position, eff1, eff2)
+    local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
+    Shoot:FireServer(tonumber(cfg.Misc.PowerShot.Power) or 230, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
 end
 
--- ==========================================
--- AUTO GOL (ALTURA PROGRESSIVA + CORREÇÃO)
--- ==========================================
-local function chuteAutoGol()
-    local hrp = getHRP()
-    local cfg = getCfg()
-    if not hrp or not cfg then return end
-
-    local alvo1, alvo2
-    if player.Team and player.Team.Name == "Red" then
-        alvo1, alvo2 = TRAVE_BLUE_1, TRAVE_BLUE_2
-    else
-        alvo1, alvo2 = TRAVE_RED_1, TRAVE_RED_2
+local function executarAutoSteal()
+    local hrp, cfg, ball = getHRP(), getCfg(), getBall()
+    if not hrp or not cfg or not ball or ball:GetAttribute("State") == player.Name then return end
+    
+    local oldPos = hrp.CFrame
+    Tackle:FireServer()
+    local start = tick()
+    local pegou = false
+    while ball and tick() - start < 1.2 do
+        local st = ball:GetAttribute("State")
+        if st == "UNTOUCHABLE" or st == player.Name then pegou = true; break end
+        tpSeguro(ball.Position + Vector3.new(0, 2, 0))
+        task.wait(0.03)
     end
+    if pegou then task.wait(0.05); tpSeguro(oldPos.Position) end
+end
 
-    local centro = (alvo1 + alvo2) / 2
-    local ladoGol = (alvo2 - alvo1).Unit
-    local relative = hrp.Position - centro
-    local dot = relative:Dot(ladoGol)
-    local alvoFinal = (dot > 0) and alvo1 or alvo2
-
+local function executarAutoGoal()
+    local hrp, cfg, ball = getHRP(), getCfg(), getBall()
+    if not hrp or not cfg or not ball then return end
+    
+    tpSeguro(ball.Position + Vector3.new(0, 2, 0))
+    Tackle:FireServer()
+    task.wait(0.2)
+    tpSeguro((player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED)
+    task.wait(0.8)
+    
+    -- Lógica de direção do gol
+    local a1, a2 = (player.Team.Name == "Red") and (TRAVE_BLUE_1, TRAVE_BLUE_2) or (TRAVE_RED_1, TRAVE_RED_2)
+    local centro = (a1 + a2) / 2
+    local alvoFinal = ((hrp.Position - centro):Dot((a2 - a1).Unit) > 0) and a1 or a2
     local delta = alvoFinal - hrp.Position
     local dist = delta.Magnitude
-    local horizontal = Vector3.new(delta.X, 0, delta.Z).Unit
-
-    -- Cálculo de Altura Progressiva
-    local altura
-    if dist < 60 then
-        altura = -1
-    else
-        local step20 = math.floor((dist - 60) / 20)
-        local bonus80 = math.floor((dist - 60) / 80)
-        local bonus160 = math.floor((dist - 60) / 160)
-        local mult = 0.14 + (step20 * 0.01) + (bonus80 * 0.01) + (bonus160 * 0.01)
-        altura = dist * mult
-    end
-
-    -- Correção de altura se estiver no ar
-    local alturaDoChao = hrp.Position.Y + 25
-    if alturaDoChao > 0 then
-        local reducao = 1 - math.clamp((alturaDoChao / 20), 0, 0.7)
-        local fatorDist = math.clamp(dist / 100, 0.3, 1)
-        altura = altura * reducao * fatorDist
-    end
-
-    local dir = (horizontal + Vector3.new(0, altura / dist, 0)).Unit
-    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
-
-    Shoot:FireServer(pwr, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
+    local altura = (dist < 60) and -1 or (dist * (0.14 + (math.floor((dist-60)/20)*0.01)))
+    local dir = (Vector3.new(delta.X, 0, delta.Z).Unit + Vector3.new(0, altura/dist, 0)).Unit
+    Shoot:FireServer(tonumber(cfg.Misc.PowerShot.Power) or 230, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
 end
 
--- ==========================================
--- GERENCIADOR DE TECLAS (BINDS DINÂMICOS)
--- ==========================================
+-- // SUPORTE MOBILE (Com Cooldown no Tackle)
+task.spawn(function()
+    local mobileFrame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 10):WaitForChild("Frame", 5)
+    if mobileFrame then
+        -- Botão Tackle (Auto Steal) com Cooldown apenas aqui
+        mobileFrame:WaitForChild("TackleButton").MouseButton1Click:Connect(function()
+            if tick() - lastMobileTackle >= tackleCooldown then
+                executarAutoSteal()
+                lastMobileTackle = tick()
+            end
+        end)
+        -- Botão Talent (Auto Goal)
+        mobileFrame:WaitForChild("TalentButton").MouseButton1Click:Connect(executarAutoGoal)
+        -- Botão Shoot (PowerShot)
+        local btnShoot = mobileFrame:WaitForChild("ShootButton")
+        local pStart = 0
+        btnShoot.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then pStart = tick() end end)
+        btnShoot.InputEnded:Connect(function(i)
+            local cfg = getCfg()
+            if cfg and cfg.Misc.PowerShot.Enabled and (tick() - pStart) >= (tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47) then
+                executarChuteForte()
+            end
+        end)
+    end
+end)
+
+-- // SUPORTE PC (Sem Cooldown)
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     local cfg = getCfg()
     if not cfg then return end
 
-    local hrp = getHRP()
-
-    -- AUTO STEAL
-    local keySteal = cfg.Misc.AutoSteal.Key:upper()
-    if input.KeyCode == Enum.KeyCode[keySteal] and cfg.Misc.AutoSteal.Enabled then
-        task.spawn(function()
-            local ball = getBall()
-            if not ball then return end
-            
-            local state = ball:GetAttribute("State")
-            if state == "UNTOUCHABLE" or state == player.Name then return end
-
-            local oldPos = hrp.CFrame
-            Tackle:FireServer()
-
-            local startTime = tick()
-            local pegouBola = false
-
-            while ball and ball.Parent and (tick() - startTime) < 1.2 do
-                local currentState = ball:GetAttribute("State")
-                if currentState == "UNTOUCHABLE" then pegouBola = true; break end
-                if currentState == player.Name then break end
-
-                tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-                
-                if ball.AssemblyLinearVelocity.Magnitude > 5 then
-                    hrp.AssemblyLinearVelocity = ball.AssemblyLinearVelocity.Unit * 90
-                end
-                task.wait(0.03)
-            end
-
-            if pegouBola then
-                task.wait(0.05)
-                tpSeguro(oldPos.Position)
-            end
-        end)
-    end
-
-    -- AUTO GOAL COMBO (TP + CHUTE)
-    local keyGoal = cfg.Misc.AutoGoal.Key:upper()
-    if input.KeyCode == Enum.KeyCode[keyGoal] and cfg.Misc.AutoGoal.Enabled then
-        task.spawn(function()
-            local ball = getBall()
-            if not ball then return end
-
-            tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-            Tackle:FireServer()
-            task.wait(0.2)
-
-            local alvoTP = (player.Team and player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
-            tpSeguro(alvoTP)
-
-            task.wait(0.8)
-            chuteAutoGol()
-        end)
+    if input.KeyCode == Enum.KeyCode[cfg.Misc.AutoSteal.Key:upper()] and cfg.Misc.AutoSteal.Enabled then
+        executarAutoSteal()
+    elseif input.KeyCode == Enum.KeyCode[cfg.Misc.AutoGoal.Key:upper()] and cfg.Misc.AutoGoal.Enabled then
+        executarAutoGoal()
     end
 end)
 
--- ==========================================
--- SISTEMA MOUSE 2 (HOLD TIME)
--- ==========================================
-local segurandoM2 = false
-local tempoM2 = 0
-local disparoPendente = false
-
-CAS:BindActionAtPriority("M2ChuteForte", function(_, state)
+-- SISTEMA M2 (PC)
+CAS:BindActionAtPriority("M2Chute", function(_, state)
     local cfg = getCfg()
-    -- Verifica se o Power Shot está ligado na UI
-    if not cfg or not cfg.Misc.PowerShot.Enabled then 
-        segurandoM2 = false
-        return Enum.ContextActionResult.Pass 
-    end
-
-    if state == Enum.UserInputState.Begin then
-        segurandoM2 = true
-        tempoM2 = tick()
-    elseif state == Enum.UserInputState.End and segurandoM2 then
-        segurandoM2 = false
-        local holdNecessario = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
-        
-        if (tick() - tempoM2) >= holdNecessario then
-            if disparoPendente then return end
+    if not cfg or not cfg.Misc.PowerShot.Enabled then return Enum.ContextActionResult.Pass end
+    static_pStart = static_pStart or 0
+    if state == Enum.UserInputState.Begin then static_pStart = tick()
+    elseif state == Enum.UserInputState.End then
+        if (tick() - static_pStart) >= (tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47) and not disparoPendente then
             disparoPendente = true
-            task.delay(0.01, function()
-                for i = 1, 4 do
-                    executarChuteForte()
-                    task.wait()
-                end
-                disparoPendente = false
-            end)
+            for i=1,4 do executarChuteForte(); task.wait() end
+            disparoPendente = false
         end
     end
     return Enum.ContextActionResult.Pass
 end, false, 3000, Enum.UserInputType.MouseButton2)
 
--- ==========================================
--- LOOP DE ATRIBUTOS (FLOW / METAVISION)
--- ==========================================
+-- LOOP FLOW/META
 task.spawn(function()
-    while true do
+    while task.wait(0.5) do
         local cfg = getCfg()
         if cfg then
-            -- Aplica os atributos conforme o estado na UI
-            if cfg.Player.FakeFlow then 
-                player:SetAttribute("Flow", true) 
-            else
-                player:SetAttribute("Flow", false)
-            end
-
-            if cfg.Player.FakeMetavision then 
-                player:SetAttribute("Metavision", true) 
-            else
-                player:SetAttribute("Metavision", false)
-            end
+            player:SetAttribute("Flow", cfg.Player.FakeFlow)
+            player:SetAttribute("Metavision", cfg.Player.FakeMetavision)
         end
-        task.wait(0.5)
     end
 end)
 
-print("🚀 RRR Comandos: Sistema Carregado e Sincronizado!")
+print("✅ comandos.lua: Mobile (com cooldown) e PC carregados!")
