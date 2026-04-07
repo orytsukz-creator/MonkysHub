@@ -134,12 +134,29 @@ local function AddCheat(parent, text, category, configKey, hasBind)
         end)
     end
 
-    local function update()
+local function update()
         local val = getgenv().RRR_Config[category][configKey]
         if type(val) == "table" then val = val.Enabled end
+        
         btn.Text = val and "ON" or "OFF"
         btn.BackgroundColor3 = val and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
     end
+
+    btn.MouseButton1Click:Connect(function()
+        local d = getgenv().RRR_Config[category][configKey]
+        
+        -- MUDA O VALOR NA TABELA GLOBAL AQUI
+        if type(d) == "table" then 
+            getgenv().RRR_Config[category][configKey].Enabled = not d.Enabled 
+        else 
+            getgenv().RRR_Config[category][configKey] = not d 
+        end
+        
+        update() 
+        Save() -- Salva no JSON
+        print(text .. " mudou para: " .. tostring(getgenv().RRR_Config[category][configKey]))
+    end)
+    
     update()
 
     btn.MouseButton1Click:Connect(function()
