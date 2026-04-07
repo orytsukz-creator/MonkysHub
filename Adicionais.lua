@@ -83,7 +83,7 @@ local function executarAutoGoal()
     local alvoFinal = ((hrp.Position - centro):Dot((a2 - a1).Unit) > 0) and a1 or a2
     local delta = alvoFinal - hrp.Position
     local dist = delta.Magnitude
-    local altura = (dist < 60) and -1 or (dist * (0.14 + (math.floor((dist-60)/20)*0.01)))
+    local altura = (dist < 60) and -1 or (dist * (0.13 + (math.floor((dist-60)/20)*0.01)))
     local dir = (Vector3.new(delta.X, 0, delta.Z).Unit + Vector3.new(0, altura/dist, 0)).Unit
     
     Shoot:FireServer(tonumber(cfg.Misc.PowerShot.Power) or 230, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
