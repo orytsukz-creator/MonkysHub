@@ -1,17 +1,18 @@
--- // comandos.lua (CLEAN ASCII - MAGNITUDE > 10)
+-- // comandos.lua (TEMPLATE REVISADO - MAGNITUDE > 10)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // 1. AGUARDAR DEPENDENCIAS
+-- // 1. AGUARDAR DEPENDENCIAS (Garante que os Remotes existam)
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes", 20)
-local Tackle = Remotes and Remotes:WaitForChild("Tackle", 10)
+-- Ajuste aqui: Garante que o Tackle seja pego corretamente
+local Tackle = Remotes:WaitForChild("Tackle", 10)
 
 -- Espera a Hub carregar para nao dar erro de Nil Value
-repeat task.wait() until getgenv().RRR_Config
+repeat task.wait() until getgenv().RRR_Config and getgenv().RRR_Config.Misc
 
 -- // 2. POSICOES
 local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
@@ -93,6 +94,7 @@ end
 -- // 4. SISTEMA DINAMICO (MOBILE & PC)
 local function checkBind(input, category, key)
     local cfg = getCfg()
+    -- Adicionada protecao extra de existencia da categoria/key
     if not cfg or not cfg[category] or not cfg[category][key] or not cfg[category][key].Enabled then return false end
     
     local bind = tostring(cfg[category][key].Key)
@@ -120,6 +122,7 @@ end)
 local pStart = 0
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
+    -- Suporte a M2 nativo para o chute
     if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
         pStart = tick()
     end
@@ -128,7 +131,7 @@ end)
 UIS.InputEnded:Connect(function(input)
     if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
         local cfg = getCfg()
-        if cfg and cfg.Misc.PowerShot.Enabled then
+        if cfg and cfg.Misc.PowerShot and cfg.Misc.PowerShot.Enabled then
             local holdReq = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
             if (tick() - pStart) >= holdReq and not disparoPendente then
                 disparoPendente = true
@@ -144,7 +147,7 @@ end)
 task.spawn(function()
     while task.wait(0.5) do
         local cfg = getCfg()
-        if cfg then
+        if cfg and cfg.Player then
             pcall(function()
                 player:SetAttribute("Flow", cfg.Player.FakeFlow)
                 player:SetAttribute("Metavision", cfg.Player.FakeMetavision)
