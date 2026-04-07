@@ -1,4 +1,4 @@
--- // HubRRR.lua (Apenas adição do Informativo Mobile)
+-- // HubRRR.lua - Versão Final com Suporte Mobile Visual
 local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -20,20 +20,15 @@ local DefaultConfig = {
     }
 }
 
-if not getgenv().RRR_Config then
-    getgenv().RRR_Config = DefaultConfig
-end
+if not getgenv().RRR_Config then getgenv().RRR_Config = DefaultConfig end
 
 local BlacklistedKeys = {
     ["W"] = true, ["A"] = true, ["S"] = true, ["D"] = true,
-    ["Space"] = true, ["One"] = true, ["Two"] = true, 
-    ["Three"] = true, ["Four"] = true, ["Unknown"] = true
+    ["Space"] = true, ["Unknown"] = true
 }
 
 local function Save()
-    if writefile then 
-        writefile(ConfigFile, HttpService:JSONEncode(getgenv().RRR_Config)) 
-    end
+    if writefile then pcall(function() writefile(ConfigFile, HttpService:JSONEncode(getgenv().RRR_Config)) end) end
 end
 
 local function Load()
@@ -42,9 +37,7 @@ local function Load()
         if s then
             for cat, content in pairs(decoded) do
                 if getgenv().RRR_Config[cat] then
-                    for key, val in pairs(content) do 
-                        getgenv().RRR_Config[cat][key] = val 
-                    end
+                    for key, val in pairs(content) do getgenv().RRR_Config[cat][key] = val end
                 end
             end
         end
@@ -52,7 +45,7 @@ local function Load()
 end
 Load()
 
--- // 2. ESTRUTURA DA INTERFACE
+-- // 2. ESTRUTURA PRINCIPAL
 local RRR = Instance.new("ScreenGui")
 RRR.Name = "RRR_Hub"
 RRR.ResetOnSpawn = false
@@ -60,33 +53,17 @@ pcall(function() RRR.Parent = CoreGui end)
 if not RRR.Parent then RRR.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 local Drag = Instance.new("ImageLabel")
+Drag.Name = "MainFrame"
 Drag.Size = UDim2.new(0, 520, 0, 350)
 Drag.Position = UDim2.new(0.5, -260, 0.5, -175)
-Drag.Image = "rbxassetid://132146341566959"
+Drag.Image = "rbxassetid://132146341566959" -- ID da sua Imagem de Fundo/Título
 Drag.BackgroundTransparency = 1
 Drag.Active = true
+Drag.Draggable = true -- Ativado para facilitar
 Drag.Parent = RRR
 
--- // [NOVO] TEXTO INFORMATIVO MOBILE (Adicionado sem mudar a UI)
-local MobileInfo = Instance.new("TextLabel")
-MobileInfo.Name = "MobileInfo"
-MobileInfo.Size = UDim2.new(0.7, 0, 0.08, 0)
-MobileInfo.Position = UDim2.new(0.22, 0, 0.05, 0)
-MobileInfo.BackgroundTransparency = 1
-MobileInfo.TextColor3 = Color3.fromRGB(0, 255, 255)
-MobileInfo.Font = Enum.Font.SourceSansItalic
-MobileInfo.TextScaled = true
-MobileInfo.TextStrokeTransparency = 0.5
-MobileInfo.Visible = false -- Fica invisível por padrão
-MobileInfo.Parent = Drag
-
--- Lógica para detectar Mobile e definir o texto
-if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-    MobileInfo.Visible = true
-    MobileInfo.Text = "📱 Mobile Detectado: Use os botões da tela (Tackle/Talent/Shoot)"
-end
-
 local Main = Instance.new("ImageLabel")
+Main.Name = "ContentFrame"
 Main.Size = UDim2.new(0.78, 0, 0.82, 0)
 Main.Position = UDim2.new(0.18, 0, 0.14, 0)
 Main.Image = "rbxassetid://116118555895648"
@@ -110,10 +87,12 @@ local MiscPage = CreatePage()
 local PlayerPage = CreatePage()
 MiscPage.Visible = true
 
--- // 3. COMPONENTES (Ajustado para texto dinâmico no Bind)
+-- // 3. FUNÇÃO ADDCHEAT (Com Texto Mobile embaixo do Nome)
 local function AddCheat(parent, text, category, configKey, hasBind)
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -5, 0, 45)
+    frame.Size = UDim2.new(1, -5, 0, isMobile and 55 or 45) -- Maior se for Mobile
     frame.BackgroundColor3 = Color3.fromRGB(45, 65, 110)
     frame.BackgroundTransparency = 0.3
     frame.Parent = parent
@@ -121,13 +100,31 @@ local function AddCheat(parent, text, category, configKey, hasBind)
 
     local label = Instance.new("TextLabel")
     label.Text = "  " .. text
-    label.Size = UDim2.new(0.4, 0, 1, 0)
+    label.Size = UDim2.new(0.5, 0, isMobile and 0.5 or 1, 0)
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.BackgroundTransparency = 1
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextSize = 17
     label.Font = Enum.Font.SourceSansBold
     label.Parent = frame
+
+    -- Texto informativo exclusivo para Mobile
+    if isMobile then
+        local subLabel = Instance.new("TextLabel")
+        subLabel.Size = UDim2.new(0.6, 0, 0.4, 0)
+        subLabel.Position = UDim2.new(0, 12, 0.5, 0)
+        subLabel.BackgroundTransparency = 1
+        subLabel.TextColor3 = Color3.fromRGB(0, 255, 255)
+        subLabel.TextSize = 12
+        subLabel.Font = Enum.Font.SourceSansItalic
+        subLabel.TextXAlignment = Enum.TextXAlignment.Left
+        subLabel.TextScaled = true
+        
+        if configKey == "AutoGoal" then subLabel.Text = "Usa o botão: TALENT"
+        elseif configKey == "AutoSteal" then subLabel.Text = "Usa o botão: TACKLE"
+        else subLabel.Text = "Função Automática" end
+        subLabel.Parent = frame
+    end
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 65, 0, 25)
@@ -150,60 +147,45 @@ local function AddCheat(parent, text, category, configKey, hasBind)
         Save()
     end)
 
-    if hasBind then
+    -- Bind só aparece se for PC
+    if hasBind and not isMobile then
         local bBtn = Instance.new("TextButton")
         bBtn.Size = UDim2.new(0, 70, 0, 25)
         bBtn.Position = UDim2.new(0.55, 0, 0.22, 0)
         bBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
         bBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        bBtn.Text = getgenv().RRR_Config[category][configKey].Key or "NONE"
         bBtn.Parent = frame
         Instance.new("UICorner", bBtn)
 
-        -- [NOVO] Função para mostrar botão em vez de tecla no mobile
-        local function refreshBindText()
-            if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-                if configKey == "AutoGoal" then bBtn.Text = "TALENT"
-                elseif configKey == "AutoSteal" then bBtn.Text = "TACKLE"
-                else bBtn.Text = "BTN" end
-                bBtn.TextColor3 = Color3.fromRGB(0, 255, 255)
-            else
-                bBtn.Text = getgenv().RRR_Config[category][configKey].Key or "NONE"
-            end
-        end
-
         bBtn.MouseButton1Click:Connect(function()
-            if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
-                return -- Mobile não altera Keybind manualmente
-            end
             local old = bBtn.Text
             bBtn.Text = "..."
             local input = UserInputService.InputBegan:Wait()
             if input.UserInputType == Enum.UserInputType.Keyboard then
-                local newKey = input.KeyCode.Name
-                local emUso = false
-                for _, cat in pairs(getgenv().RRR_Config) do
-                    if type(cat) == "table" then
-                        for _, feat in pairs(cat) do
-                            if type(feat) == "table" and feat.Key == newKey then emUso = true break end
-                        end
+                local newK = input.KeyCode.Name
+                local jaTem = false
+                for _,c in pairs(getgenv().RRR_Config) do
+                    if type(c) == "table" then
+                        for _,f in pairs(c) do if type(f) == "table" and f.Key == newK then jaTem = true break end end
                     end
                 end
-                if BlacklistedKeys[newKey] then
-                    bBtn.Text = "BLOQUEADA"; task.wait(0.8); bBtn.Text = old
-                elseif emUso then
-                    bBtn.Text = "EM USO"; task.wait(0.8); bBtn.Text = old
+                if BlacklistedKeys[newK] or jaTem then
+                    bBtn.Text = jaTem and "EM USO" or "BLOCKED"
+                    task.wait(0.8)
+                    bBtn.Text = old
                 else
-                    getgenv().RRR_Config[category][configKey].Key = newKey
-                    bBtn.Text = newKey
+                    getgenv().RRR_Config[category][configKey].Key = newK
+                    bBtn.Text = newK
                     Save()
                 end
             else bBtn.Text = old end
         end)
-        refreshBindText()
     end
     update()
 end
 
+-- // 4. POWER SHOT SECTION
 local function AddPowerShot(parent)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -5, 0, 145)
@@ -212,35 +194,27 @@ local function AddPowerShot(parent)
     frame.Parent = parent
     Instance.new("UICorner", frame)
 
-    local cheatLabel = Instance.new("TextLabel")
-    cheatLabel.Text = "  Power Shot (Hold M2)"
-    cheatLabel.Size = UDim2.new(0, 200, 0, 35)
-    cheatLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    cheatLabel.BackgroundTransparency = 1
-    cheatLabel.Font = Enum.Font.SourceSansBold
-    cheatLabel.TextSize = 19
-    cheatLabel.TextXAlignment = Enum.TextXAlignment.Left
-    cheatLabel.Parent = frame
+    local title = Instance.new("TextLabel")
+    title.Text = "  Power Shot (Hold M2/Shoot)"
+    title.Size = UDim2.new(0, 200, 0, 35)
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 19
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = frame
 
-    local box = Instance.new("TextBox")
-    box.Size = UDim2.new(0, 40, 0, 22)
-    box.Position = UDim2.new(0.7, 0, 0.05, 0)
-    box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    box.Text = getgenv().RRR_Config.Misc.PowerShot.Power
-    box.TextColor3 = Color3.fromRGB(255, 255, 255)
-    box.Parent = frame
-    Instance.new("UICorner", box)
-    box.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.Power = box.Text; Save() end)
+    local pBox = Instance.new("TextBox")
+    pBox.Size = UDim2.new(0, 40, 0, 22); pBox.Position = UDim2.new(0.7, 0, 0.05, 0)
+    pBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20); pBox.Text = getgenv().RRR_Config.Misc.PowerShot.Power
+    pBox.TextColor3 = Color3.fromRGB(255, 255, 255); pBox.Parent = frame; Instance.new("UICorner", pBox)
+    pBox.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.Power = pBox.Text; Save() end)
 
-    local box2 = Instance.new("TextBox")
-    box2.Size = UDim2.new(0, 40, 0, 22)
-    box2.Position = UDim2.new(0.85, 0, 0.05, 0)
-    box2.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    box2.Text = getgenv().RRR_Config.Misc.PowerShot.HoldTime
-    box2.TextColor3 = Color3.fromRGB(255, 255, 255)
-    box2.Parent = frame
-    Instance.new("UICorner", box2)
-    box2.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.HoldTime = box2.Text; Save() end)
+    local hBox = Instance.new("TextBox")
+    hBox.Size = UDim2.new(0, 40, 0, 22); hBox.Position = UDim2.new(0.85, 0, 0.05, 0)
+    hBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20); hBox.Text = getgenv().RRR_Config.Misc.PowerShot.HoldTime
+    hBox.TextColor3 = Color3.fromRGB(255, 255, 255); hBox.Parent = frame; Instance.new("UICorner", hBox)
+    hBox.FocusLost:Connect(function() getgenv().RRR_Config.Misc.PowerShot.HoldTime = hBox.Text; Save() end)
 
     local function CreateRow(txt, y, key)
         local r = Instance.new("Frame")
@@ -254,7 +228,7 @@ local function AddPowerShot(parent)
                 b.BackgroundTransparency = isSel and 0 or 0.6
             end
             up()
-            b.MouseButton1Click:Connect(function() getgenv().RRR_Config.Misc.PowerShot[key] = val; Save(); for _,v in pairs(r:GetChildren()) do if v:IsA("TextButton") then v.BackgroundTransparency = 0.6 end end; b.BackgroundTransparency = 0 end)
+            b.MouseButton1Click:Connect(function() getgenv().RRR_Config.Misc.PowerShot[key] = val; Save(); for _,v in pairs(r:GetChildren()) do if v:IsA("TextButton") then v.BackgroundTransparency = 0.6 end end; b.BackgroundTransparency = 0; up() end)
         end
         MkB("TRUE", true, 0.65); MkB("FALSE", false, 0.82)
     end
@@ -263,7 +237,18 @@ local function AddPowerShot(parent)
     CreateRow("Apply Effect 2:", 110, "Effect2")
 end
 
--- // 4. MONTAGEM
+-- // 5. SIDEBAR E MONTAGEM
+local Side = Instance.new("Frame", Drag); Side.Size = UDim2.new(0.15, 0, 0.5, 0); Side.Position = UDim2.new(0.02, 0, 0.18, 0); Side.BackgroundTransparency = 1
+Instance.new("UIListLayout", Side).Padding = UDim.new(0, 10)
+
+local function MakeTab(t, p)
+    local b = Instance.new("TextButton", Side); b.Size = UDim2.new(1, 0, 0, 30); b.Text = t; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Font = Enum.Font.SourceSansBold; b.TextSize = 18; b.BackgroundTransparency = 0.8; b.BackgroundColor3 = Color3.fromRGB(255,255,255); Instance.new("UICorner", b)
+    b.MouseButton1Click:Connect(function() MiscPage.Visible = (p == MiscPage); PlayerPage.Visible = (p == PlayerPage) end)
+end
+
+MakeTab("Misc", MiscPage)
+MakeTab("Player", PlayerPage)
+
 AddPowerShot(MiscPage)
 AddCheat(MiscPage, "Auto Goal", "Misc", "AutoGoal", true)
 AddCheat(MiscPage, "Auto Steal", "Misc", "AutoSteal", true)
@@ -271,20 +256,5 @@ AddCheat(PlayerPage, "Cancel Cutscene", "Player", "CancelCutscene", true)
 AddCheat(PlayerPage, "Fake Flow", "Player", "FakeFlow", false)
 AddCheat(PlayerPage, "Fake Metavision", "Player", "FakeMetavision", false)
 
--- // 5. SIDEBAR E TABS
-local Side = Instance.new("Frame", Drag); Side.Size = UDim2.new(0.15, 0, 0.5, 0); Side.Position = UDim2.new(0.02, 0, 0.18, 0); Side.BackgroundTransparency = 1
-Instance.new("UIListLayout", Side).Padding = UDim.new(0, 10)
-local function MakeTab(t, p)
-    local b = Instance.new("TextButton", Side); b.Size = UDim2.new(1, 0, 0, 30); b.Text = t; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Font = Enum.Font.SourceSansBold; b.TextSize = 18; b.BackgroundTransparency = 0.8; b.BackgroundColor3 = Color3.fromRGB(255,255,255); Instance.new("UICorner", b)
-    b.MouseButton1Click:Connect(function() MiscPage.Visible = (p == MiscPage); PlayerPage.Visible = (p == PlayerPage) end)
-end
-MakeTab("Misc", MiscPage); MakeTab("Player", PlayerPage)
-
--- // 6. DRAG E TOGGLE (Z)
+-- // 6. TOGGLE MENU (Z)
 UserInputService.InputBegan:Connect(function(i, g) if not g and i.KeyCode == Enum.KeyCode.Z then Drag.Visible = not Drag.Visible end end)
-local dS, sP, dragging
-Drag.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true; dS = i.Position; sP = Drag.Position end end)
-UserInputService.InputChanged:Connect(function(i) if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-    local delta = i.Position - dS; Drag.Position = UDim2.new(sP.X.Scale, sP.X.Offset + delta.X, sP.Y.Scale, sP.Y.Offset + delta.Y)
-end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
