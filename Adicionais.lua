@@ -1,29 +1,21 @@
--- // comandos.lua (REVISADO - FINAL)
+-- // comandos.lua (PURO ASCII - SEM ERROS UNICODE)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
-local CAS = game:GetService("ContextActionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // PROTECAO CONTRA NIL (Aguardar com paciencia os remotes)
+-- // 1. AGUARDAR REMOTES
 local Shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes", 20)
-local Tackle = nil
+local Tackle = Remotes and Remotes:WaitForChild("Tackle", 10)
 
-if Remotes then
-    Tackle = Remotes:WaitForChild("Tackle", 10)
-end
-
--- // POSICOES
+-- // 2. POSICOES
 local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
 local TRAVE_BLUE_1, TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1010), Vector3.new(-2202, -25, 1047)
 local GOAL_TP_RED, GOAL_TP_BLUE = Vector3.new(-2848, -25, 1030), Vector3.new(-2261, -25, 1030)
 
-local lastMobileTackle = 0
-local tackleCooldown = 2
 local disparoPendente = false
-
 local function getCfg() return getgenv().RRR_Config end
 local function getHRP() return player.Character and player.Character:FindFirstChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
@@ -31,13 +23,13 @@ local function getBall() return workspace:FindFirstChild("Ball") end
 local function tpSeguro(pos)
     local hrp = getHRP()
     if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
         hrp.CFrame = CFrame.new(pos)
     end
 end
 
--- // FUNCOES DE EXECUCAO
+-- // 3. FUNCOES DE EXECUCAO
 local function executarChuteForte()
     local hrp, cfg = getHRP(), getCfg()
     if not hrp or not cfg or not Shoot then return end
@@ -72,7 +64,7 @@ local function executarAutoGoal()
     Tackle:FireServer()
     task.wait(0.2)
     
-    local timeName = player.Team and player.Team.Name or "Red"
+    local timeName = (player.Team and player.Team.Name) or "Red"
     tpSeguro((timeName == "Red") and GOAL_TP_BLUE or GOAL_TP_RED)
     task.wait(0.8)
     
@@ -86,71 +78,57 @@ local function executarAutoGoal()
     Shoot:FireServer(tonumber(cfg.Misc.PowerShot.Power) or 230, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
 end
 
--- // MOBILE SUPPORT (CONECTA APENAS SE EXISTIR)
-task.spawn(function()
-    local MobileSupport = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 15)
-    local Frame = MobileSupport and MobileSupport:WaitForChild("Frame", 5)
+-- // 4. SISTEMA DINAMICO (MOBILE & PC)
+local function checkBind(input, category, key)
+    local cfg = getCfg()
+    if not cfg or not cfg[category] or not cfg[category][key] or not cfg[category][key].Enabled then return false end
     
-    if Frame then
-        local tBtn = Frame:FindFirstChild("TackleButton")
-        if tBtn then
-            tBtn.MouseButton1Click:Connect(function()
-                if tick() - lastMobileTackle >= tackleCooldown then
-                    executarAutoSteal()
-                    lastMobileTackle = tick()
-                end
-            end)
-        end
-        local gBtn = Frame:FindFirstChild("TalentButton")
-        if gBtn then
-            gBtn.MouseButton1Click:Connect(executarAutoGoal)
-        end
-        local sBtn = Frame:FindFirstChild("ShootButton")
-        if sBtn then
-            local pStart = 0
-            sBtn.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch then pStart = tick() end end)
-            sBtn.InputEnded:Connect(function(i)
-                local cfg = getCfg()
-                if cfg and cfg.Misc.PowerShot.Enabled and (tick() - pStart) >= (tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47) then
-                    executarChuteForte()
-                end
-            end)
+    local bind = tostring(cfg[category][key].Key)
+    
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        return input.KeyCode.Name:upper() == bind:upper()
+    end
+    
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local objects = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+        for _, obj in pairs(objects) do
+            if obj.Name == bind then return true end
         end
     end
-end)
+    return false
+end
 
--- // PC INPUTS
+-- // 5. EVENTOS DE INPUT
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
-    local cfg = getCfg()
-    if not cfg then return end
+    if checkBind(input, "Misc", "AutoSteal") then executarAutoSteal()
+    elseif checkBind(input, "Misc", "AutoGoal") then executarAutoGoal() end
+end)
 
-    local kName = input.KeyCode.Name:upper()
-    if kName == tostring(cfg.Misc.AutoSteal.Key):upper() and cfg.Misc.AutoSteal.Enabled then
-        executarAutoSteal()
-    elseif kName == tostring(cfg.Misc.AutoGoal.Key):upper() and cfg.Misc.AutoGoal.Enabled then
-        executarAutoGoal()
+local pStart = 0
+UIS.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        pStart = tick()
     end
 end)
 
--- SISTEMA M2 (PC)
-local static_pStart = 0
-CAS:BindActionAtPriority("M2Chute", function(_, state)
-    local cfg = getCfg()
-    if not cfg or not cfg.Misc.PowerShot.Enabled then return Enum.ContextActionResult.Pass end
-    if state == Enum.UserInputState.Begin then 
-        static_pStart = tick()
-    elseif state == Enum.UserInputState.End then
-        if (tick() - static_pStart) >= (tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47) and not disparoPendente then
-            disparoPendente = true
-            for i=1,4 do executarChuteForte(); task.wait() end
-            disparoPendente = false
+UIS.InputEnded:Connect(function(input)
+    if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        local cfg = getCfg()
+        if cfg and cfg.Misc.PowerShot.Enabled then
+            local holdReq = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
+            if (tick() - pStart) >= holdReq and not disparoPendente then
+                disparoPendente = true
+                executarChuteForte()
+                task.wait(0.1)
+                disparoPendente = false
+            end
         end
     end
-    return Enum.ContextActionResult.Pass
-end, false, 3000, Enum.UserInputType.MouseButton2)
+end)
 
--- LOOP ATRIBUTOS
+-- // 6. LOOP DE ATRIBUTOS
 task.spawn(function()
     while task.wait(0.5) do
         local cfg = getCfg()
