@@ -1,169 +1,119 @@
--- // comandos.lua (REVISADO: ANTI-ERRO & MAGNITUDE > 10)
+-- // comandos.lua (REVISADO: DETECÇÃO AUTOMÁTICA MOBILE/PC)
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // 1. AGUARDAR DEPENDENCIAS (Garante que os itens do jogo carregaram)
-local function getRemotes()
-    local shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
-    local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 20)
-    local tackle = remotesFolder and remotesFolder:WaitForChild("Tackle", 10)
-    return shoot, tackle
-end
+-- // 1. DEPENDÊNCIAS
+local Shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 20)
+local Tackle = Remotes:WaitForChild("Tackle", 10)
 
-local Shoot, Tackle = getRemotes()
-
--- Espera a Hub estar pronta no getgenv
+-- Aguarda a Hub carregar
 repeat task.wait(0.5) until getgenv().RRR_Config and getgenv().RRR_Config.Misc
 
--- // 2. POSICOES DE CAMPO
-local TRAVE_RED_1, TRAVE_RED_2 = Vector3.new(-2907, -25, 1010), Vector3.new(-2907, -25, 1047)
-local TRAVE_BLUE_1, TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1010), Vector3.new(-2202, -25, 1047)
-local GOAL_TP_RED, GOAL_TP_BLUE = Vector3.new(-2848, -25, 1030), Vector3.new(-2261, -25, 1030)
-
+-- // 2. VARIÁVEIS DE AMBIENTE
 local disparoPendente = false
-
--- Funcoes Auxiliares de Seguranca
 local function getCfg() return getgenv().RRR_Config end
 local function getHRP() return player.Character and player.Character:FindFirstChild("HumanoidRootPart") end
 local function getBall() return workspace:FindFirstChild("Ball") end
 
+-- Função de Teleporte Seguro
 local function tpSeguro(pos)
     local hrp = getHRP()
     if hrp then
         hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
         hrp.CFrame = CFrame.new(pos)
     end
 end
 
--- // 3. FUNCOES DE EXECUCAO
+-- // 3. LÓGICA DE DETECÇÃO DE PLATAFORMA (MOBILE SUPPORT)
+local function checkBind(input, category, keyName)
+    local cfg = getCfg()
+    if not (cfg and cfg[category] and cfg[category][keyName] and cfg[category][keyName].Enabled) then 
+        return false 
+    end
 
-local function executarChuteForte()
-    local hrp, cfg = getHRP(), getCfg()
-    if not hrp or not cfg or not Shoot then return end
+    local bindSalvo = tostring(cfg[category][keyName].Key):upper()
     
-    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local effect1 = cfg.Misc.PowerShot.Effect
-    local effect2 = cfg.Misc.PowerShot.Effect2
-    
-    -- Calculo de direcao baseado na camera
-    local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
-    Shoot:FireServer(pwr, dir, dir, hrp.Position, effect1, effect2)
-end
+    -- DETECÇÃO: Se for MOBILE (Touch ativo e sem Teclado)
+    local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
-local function executarAutoSteal()
-    local hrp, cfg, ball = getHRP(), getCfg(), getBall()
-    if not hrp or not cfg or not ball or not Tackle then return end
-    
-    -- Nao tenta roubar se a bola ja for sua
-    if ball:GetAttribute("State") == player.Name then return end
-    
-    local distancia = (hrp.Position - ball.Position).Magnitude
-    
-    -- [MELHORIA SOLICITADA: DASH APENAS SE DISTANCIA > 10]
-    if distancia > 10 then
-        local oldPos = hrp.CFrame
-        Tackle:FireServer()
-        
-        local start = tick()
-        local pegou = false
-        
-        while ball and (tick() - start < 1.2) do
-            local state = ball:GetAttribute("State")
-            if state == "UNTOUCHABLE" or state == player.Name then 
-                pegou = true 
-                break 
+    if isMobile then
+        -- Tenta localizar a GUI MobileSupport do Jogo
+        local MobileSupport = player.PlayerGui:FindFirstChild("MobileSupport")
+        if MobileSupport then
+            -- Verifica se o toque do usuário acertou um botão dentro da MobileSupport
+            local objects = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+            for _, obj in pairs(objects) do
+                -- Se o nome do botão bater com o Bind salvo (ex: "Button1")
+                if obj:IsA("GuiButton") and obj.Name:upper() == bindSalvo then
+                    return true
+                end
             end
-            tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-            task.wait(0.03)
-        end
-        
-        if pegou then 
-            task.wait(0.05) 
-            tpSeguro(oldPos.Position) 
         end
     else
-        -- Se estiver perto, so solta o Tackle normal
-        Tackle:FireServer()
-    end
-end
-
-local function executarAutoGoal()
-    local hrp, cfg, ball = getHRP(), getCfg(), getBall()
-    if not hrp or not cfg or not ball or not Tackle or not Shoot then return end
-    
-    -- Pega a bola
-    tpSeguro(ball.Position + Vector3.new(0, 2, 0))
-    Tackle:FireServer()
-    task.wait(0.2)
-    
-    -- Decide o gol adversario
-    local timeName = (player.Team and player.Team.Name) or "Red"
-    local alvoGol = (timeName == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
-    tpSeguro(alvoGol)
-    task.wait(0.8)
-    
-    -- Calculo de mira no canto do gol
-    local a1, a2 = (timeName == "Red") and (TRAVE_BLUE_1, TRAVE_BLUE_2) or (TRAVE_RED_1, TRAVE_RED_2)
-    local centro = (a1 + a2) / 2
-    local alvoFinal = ((hrp.Position - centro):Dot((a2 - a1).Unit) > 0) and a1 or a2
-    
-    local delta = alvoFinal - hrp.Position
-    local dist = delta.Magnitude
-    local altura = (dist < 60) and -1 or (dist * (0.14 + (math.floor((dist-60)/20)*0.01)))
-    local dir = (Vector3.new(delta.X, 0, delta.Z).Unit + Vector3.new(0, altura/dist, 0)).Unit
-    
-    Shoot:FireServer(tonumber(cfg.Misc.PowerShot.Power) or 230, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
-end
-
--- // 4. SISTEMA DINAMICO DE BINDS (MOBILE & PC)
-local function checkBind(input, category, key)
-    local cfg = getCfg()
-    if not cfg or not cfg[category] or not cfg[category][key] then return false end
-    if not cfg[category][key].Enabled then return false end
-    
-    local bind = tostring(cfg[category][key].Key)
-    
-    -- Teclado
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        return input.KeyCode.Name:upper() == bind:upper()
-    end
-    
-    -- Mobile (Detecta clique no botao que tem o nome da Key)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local objects = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-        for _, obj in pairs(objects) do
-            if obj.Name == bind then return true end
+        -- LÓGICA PARA PC (Teclado)
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            return input.KeyCode.Name:upper() == bindSalvo
         end
     end
+
     return false
 end
 
--- // 5. CONEXOES DE INPUT
+-- // 4. FUNÇÕES DE COMBATE
+local function executarAutoSteal()
+    local hrp, ball = getHRP(), getBall()
+    if not (hrp and ball and Tackle) then return end
+    if ball:GetAttribute("State") == player.Name then return end
+
+    local distancia = (hrp.Position - ball.Position).Magnitude
+    if distancia > 10 then
+        local oldPos = hrp.CFrame
+        Tackle:FireServer()
+        local start = tick()
+        while ball and (tick() - start < 1.0) do
+            if ball:GetAttribute("State") == player.Name then break end
+            tpSeguro(ball.Position + Vector3.new(0, 2, 0))
+            task.wait(0.03)
+        end
+        task.wait(0.05)
+        tpSeguro(oldPos.Position)
+    else
+        Tackle:FireServer()
+    end
+end
+
+local function executarChuteForte()
+    local hrp, cfg = getHRP(), getCfg()
+    if not (hrp and cfg and Shoot) then return end
+    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
+    local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
+    Shoot:FireServer(pwr, dir, dir, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
+end
+
+-- // 5. CONEXÕES DE INPUT
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     
     if checkBind(input, "Misc", "AutoSteal") then
         executarAutoSteal()
-    elseif checkBind(input, "Misc", "AutoGoal") then
-        executarAutoGoal()
     end
 end)
 
--- Logica do PowerShot (Hold para carregar)
+-- Lógica do PowerShot (Segurar botão)
 local pStart = 0
 UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
-    if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
+    if checkBind(input, "Misc", "PowerShot") or (not UIS.TouchEnabled and input.UserInputType == Enum.UserInputType.MouseButton2) then
         pStart = tick()
     end
 end)
 
 UIS.InputEnded:Connect(function(input)
-    if checkBind(input, "Misc", "PowerShot") or input.UserInputType == Enum.UserInputType.MouseButton2 then
+    if checkBind(input, "Misc", "PowerShot") or (not UIS.TouchEnabled and input.UserInputType == Enum.UserInputType.MouseButton2) then
         local cfg = getCfg()
         if cfg and cfg.Misc.PowerShot.Enabled then
             local holdReq = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
@@ -177,9 +127,9 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- // 6. LOOP DE ATRIBUTOS (Flow e Metavision)
+-- // 6. LOOP DE ATRIBUTOS
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(1) do
         local cfg = getCfg()
         if cfg and cfg.Player then
             pcall(function()
@@ -190,4 +140,4 @@ task.spawn(function()
     end
 end)
 
-print(">> [RRR] COMANDOS CARREGADOS E SINCRONIZADOS!")
+print(">> [RRR] SISTEMA HÍBRIDO (PC/MOBILE) ATIVADO!")
