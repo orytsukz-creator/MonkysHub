@@ -59,26 +59,16 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- MOBILE BUTTONS (SÓ "Button")
+-- MOBILE BUTTONS (DIRETO - FIX)
 -- ==========================================
 
-local MobileButtons = {}
+local MobileFrame = player:WaitForChild("PlayerGui")
+    :WaitForChild("MobileSupport")
+    :WaitForChild("Frame")
 
-task.spawn(function()
-    task.wait(2)
-
-    local pg = player:FindFirstChild("PlayerGui")
-    local ms = pg and pg:FindFirstChild("MobileSupport")
-    local frame = ms and ms:FindFirstChild("Frame")
-
-    if frame then
-        for _,v in pairs(frame:GetChildren()) do
-            if v:IsA("GuiButton") and v.Name:sub(-6) == "Button" then
-                MobileButtons[v.Name] = v
-            end
-        end
-    end
-end)
+local function getButton(name)
+    return MobileFrame:FindFirstChild(name)
+end
 
 -- ==========================================
 -- AUTO STEAL
@@ -111,9 +101,7 @@ local function autoSteal()
             break
         end
 
-        if stateAtual == player.Name then
-            break
-        end
+        if stateAtual == player.Name then break end
 
         tpSeguro(getPred() + Vector3.new(0,2,0))
         Tackle:FireServer()
@@ -128,7 +116,7 @@ local function autoSteal()
 end
 
 -- ==========================================
--- CHUTE ENTRE TRAVES (Y = 0.131)
+-- CHUTE ENTRE TRAVES (Y 0.131)
 -- ==========================================
 
 local function chuteEntreTraves()
@@ -142,10 +130,8 @@ local function chuteEntreTraves()
     end
 
     local centro = (alvo1 + alvo2) / 2
-
     local lado = (alvo2 - alvo1).Unit
-    local relative = hrp.Position - centro
-    local dot = relative:Dot(lado)
+    local dot = (hrp.Position - centro):Dot(lado)
 
     local alvoFinal = (dot > 0) and alvo1 or alvo2
 
@@ -156,7 +142,7 @@ local function chuteEntreTraves()
 end
 
 -- ==========================================
--- AUTO GOAL (COMBO)
+-- AUTO GOAL COMBO
 -- ==========================================
 
 local function autoGoal()
@@ -178,9 +164,7 @@ local function autoGoal()
     while ball and ball.Parent do
         if tick() - startTime > 1.2 then break end
 
-        local stateAtual = ball:GetAttribute("State")
-
-        if stateAtual == "UNTOUCHABLE" then
+        if ball:GetAttribute("State") == "UNTOUCHABLE" then
             conseguiu = true
             break
         end
@@ -193,16 +177,13 @@ local function autoGoal()
 
     if not conseguiu then return end
 
-    -- TP pro gol inimigo
     task.wait(0.05)
 
     local goalPos = (player.Team and player.Team.Name == "Red")
-        and GOAL_TP_BLUE
-        or GOAL_TP_RED
+        and GOAL_TP_BLUE or GOAL_TP_RED
 
     tpSeguro(goalPos)
 
-    -- chute
     task.wait(0.1)
     chuteEntreTraves()
 end
@@ -211,53 +192,38 @@ end
 -- POWERSHOT
 -- ==========================================
 
-local segurandoM2 = false
-local tempoM2 = 0
-local disparoPendente = false
-
-local function chuteForte()
-    local hrp = getHRP()
-
-    local dir = (
-        camera.CFrame.LookVector * 310000 +
-        (camera.CFrame.LookVector + Vector3.new(0,.14,0)) * 10000000
-    ).Unit
-
-    Shoot:FireServer(230, dir, dir, hrp.Position, true, true)
-end
+local segurando = false
+local tempo = 0
 
 local function startHold()
     local cfg = getCfg()
     if not (cfg.Misc.PowerShot and cfg.Misc.PowerShot.Enabled) then return end
 
-    segurandoM2 = true
-    tempoM2 = tick()
+    segurando = true
+    tempo = tick()
 end
 
 local function endHold()
     local cfg = getCfg()
-    if not (segurandoM2 and cfg.Misc.PowerShot.Enabled) then return end
+    if not segurando then return end
 
-    local holdTime = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
+    local hold = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
 
-    if (tick() - tempoM2) >= holdTime then
-        if disparoPendente then return end
-        disparoPendente = true
-
+    if tick() - tempo >= hold then
         task.delay(0.01, function()
-            for i = 1, 4 do
-                chuteForte()
+            for i = 1,4 do
+                local dir = camera.CFrame.LookVector
+                Shoot:FireServer(230, dir, dir, getHRP().Position, true, true)
                 task.wait(0.03)
             end
-            disparoPendente = false
         end)
     end
 
-    segurandoM2 = false
+    segurando = false
 end
 
 -- ==========================================
--- INPUT
+-- INPUT PC
 -- ==========================================
 
 UIS.InputBegan:Connect(function(input, gpe)
@@ -265,11 +231,11 @@ UIS.InputBegan:Connect(function(input, gpe)
 
     local cfg = getCfg()
 
-    if cfg.Misc.AutoSteal and input.KeyCode.Name == tostring(cfg.Misc.AutoSteal.Key) then
+    if input.KeyCode.Name == tostring(cfg.Misc.AutoSteal.Key) then
         autoSteal()
     end
 
-    if cfg.Misc.AutoGoal and input.KeyCode.Name == tostring(cfg.Misc.AutoGoal.Key) then
+    if input.KeyCode.Name == tostring(cfg.Misc.AutoGoal.Key) then
         autoGoal()
     end
 
@@ -284,15 +250,31 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- MOBILE SHOOT
-task.spawn(function()
-    task.wait(2)
+-- ==========================================
+-- MOBILE (FIX REAL)
+-- ==========================================
 
-    local btn = MobileButtons["ShootButton"]
-    if btn then
-        btn.MouseButton1Down:Connect(startHold)
-        btn.MouseButton1Up:Connect(endHold)
+task.spawn(function()
+    local cfg = getCfg()
+
+    -- ShootButton (PowerShot)
+    local shootBtn = getButton("ShootButton")
+    if shootBtn then
+        shootBtn.MouseButton1Down:Connect(startHold)
+        shootBtn.MouseButton1Up:Connect(endHold)
+    end
+
+    -- AutoSteal button
+    local stealBtn = getButton(cfg.Misc.AutoSteal.Key)
+    if stealBtn then
+        stealBtn.MouseButton1Click:Connect(autoSteal)
+    end
+
+    -- AutoGoal button
+    local goalBtn = getButton(cfg.Misc.AutoGoal.Key)
+    if goalBtn then
+        goalBtn.MouseButton1Click:Connect(autoGoal)
     end
 end)
 
-print(">> [RRR] AUTO GOAL COMBO + Y 0.131 ATIVO 🔥")
+print(">> MOBILE FIXADO 100% 🔥")
