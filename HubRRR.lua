@@ -283,3 +283,39 @@ UserInputService.InputBegan:Connect(function(i, g)
         Drag.Visible = not Drag.Visible 
     end 
 end)
+
+-- // FLOW BUTTON (HOLD 1s PRA ABRIR/FECHAR HUB)
+
+task.spawn(function()
+    local pg = LocalPlayer:WaitForChild("PlayerGui")
+    local mobile = pg:FindFirstChild("MobileSupport")
+    local frame = mobile and mobile:FindFirstChild("Frame")
+
+    if not frame then return end
+
+    local flowBtn = frame:FindFirstChild("FlowButton")
+    if not flowBtn then return end
+
+    local segurando = false
+    local tempoInicio = 0
+
+    flowBtn.MouseButton1Down:Connect(function()
+        segurando = true
+        tempoInicio = tick()
+
+        task.spawn(function()
+            while segurando do
+                if tick() - tempoInicio >= 1 then
+                    Drag.Visible = not Drag.Visible
+                    segurando = false
+                    break
+                end
+                task.wait()
+            end
+        end)
+    end)
+
+    flowBtn.MouseButton1Up:Connect(function()
+        segurando = false
+    end)
+end)
