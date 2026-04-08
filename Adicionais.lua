@@ -106,7 +106,7 @@ local function executarAutoGoal()
     local dir = (goalPos - hrp.Position).Unit
     local dist = (hrp.Position - goalPos).Magnitude
 
-    local power = 200 + (dist * 0.6)
+    local power = 230
 
     Shoot:FireServer(
         power,
