@@ -59,7 +59,7 @@ local function tpSeguro(pos)
 end
 
 -- ==========================================
--- MOBILE BUTTONS (DIRETO - FIX)
+-- MOBILE UI (DIRETO)
 -- ==========================================
 
 local MobileFrame = player:WaitForChild("PlayerGui")
@@ -189,11 +189,35 @@ local function autoGoal()
 end
 
 -- ==========================================
--- POWERSHOT
+-- POWERSHOT (FIX MOBILE REAL)
 -- ==========================================
 
 local segurando = false
 local tempo = 0
+
+local function getShootDirection()
+    local hrp = getHRP()
+
+    local camDir = camera.CFrame.LookVector
+
+    if camDir.Magnitude < 0.1 then
+        camDir = hrp.CFrame.LookVector
+    end
+
+    local dir = (
+        camDir * 310000 +
+        (camDir + Vector3.new(0,0.14,0)) * 10000000
+    ).Unit
+
+    return dir
+end
+
+local function shootMobileSafe()
+    local hrp = getHRP()
+    local dir = getShootDirection()
+
+    Shoot:FireServer(230, dir, dir, hrp.Position, true, true)
+end
 
 local function startHold()
     local cfg = getCfg()
@@ -212,8 +236,7 @@ local function endHold()
     if tick() - tempo >= hold then
         task.delay(0.01, function()
             for i = 1,4 do
-                local dir = camera.CFrame.LookVector
-                Shoot:FireServer(230, dir, dir, getHRP().Position, true, true)
+                shootMobileSafe()
                 task.wait(0.03)
             end
         end)
@@ -251,30 +274,27 @@ UIS.InputEnded:Connect(function(input)
 end)
 
 -- ==========================================
--- MOBILE (FIX REAL)
+-- MOBILE (FINAL FIX)
 -- ==========================================
 
 task.spawn(function()
     local cfg = getCfg()
 
-    -- ShootButton (PowerShot)
     local shootBtn = getButton("ShootButton")
     if shootBtn then
         shootBtn.MouseButton1Down:Connect(startHold)
         shootBtn.MouseButton1Up:Connect(endHold)
     end
 
-    -- AutoSteal button
     local stealBtn = getButton(cfg.Misc.AutoSteal.Key)
     if stealBtn then
         stealBtn.MouseButton1Click:Connect(autoSteal)
     end
 
-    -- AutoGoal button
     local goalBtn = getButton(cfg.Misc.AutoGoal.Key)
     if goalBtn then
         goalBtn.MouseButton1Click:Connect(autoGoal)
     end
 end)
 
-print(">> MOBILE FIXADO 100% 🔥")
+print(">> SCRIPT FINAL MOBILE + PC FUNCIONANDO 🔥")
