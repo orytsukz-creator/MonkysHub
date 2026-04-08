@@ -1,175 +1,254 @@
--- // comandos.lua FINAL COMPLETO
+-- ==========================================
+-- SERVICES
+-- ==========================================
 
--- // SERVICES
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local CAS = game:GetService("ContextActionService")
+local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- // REMOTES
-local Shoot = ReplicatedStorage:WaitForChild("ShootRE", 20)
-local Remotes = ReplicatedStorage:WaitForChild("Remotes", 20)
-local Tackle = Remotes:WaitForChild("Tackle", 10)
+-- ==========================================
+-- CONFIG
+-- ==========================================
 
--- // WAIT CONFIG
-repeat task.wait(0.5) until getgenv().RRR_Config and getgenv().RRR_Config.Misc
+repeat task.wait() until getgenv().RRR_Config and getgenv().RRR_Config.Misc
 
--- // BASE
-local function getCfg() return getgenv().RRR_Config end
-local function getHRP() return player.Character and player.Character:FindFirstChild("HumanoidRootPart") end
-local function getBall() return workspace:FindFirstChild("Ball") end
+local function getCfg()
+    return getgenv().RRR_Config
+end
+
+-- ==========================================
+-- ESTADO
+-- ==========================================
+
+local ativo = true
+
+local segurandoM2 = false
+local tempoM2 = 0
+local disparoPendente = false
+
+-- ==========================================
+-- REMOTES
+-- ==========================================
+
+local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
+local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
+
+-- ==========================================
+-- BASE
+-- ==========================================
+
+local function getChar()
+    return player.Character or player.CharacterAdded:Wait()
+end
+
+local function getHRP()
+    return getChar():WaitForChild("HumanoidRootPart")
+end
+
+local function getBall()
+    return workspace:FindFirstChild("Ball")
+end
 
 local function tpSeguro(pos)
     local hrp = getHRP()
-    if hrp then
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.CFrame = CFrame.new(pos)
-    end
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hrp.CFrame = CFrame.new(pos)
 end
 
--- // CHECK BIND (PC + MOBILE)
-local function checkBind(input, category, keyName)
-    local cfg = getCfg()
-    if not (cfg and cfg[category] and cfg[category][keyName] and cfg[category][keyName].Enabled) then 
-        return false 
-    end
+-- ==========================================
+-- MOBILE CACHE (SÓ BUTTON)
+-- ==========================================
 
-    local bindSalvo = tostring(cfg[category][keyName].Key):upper()
-    local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
+local MobileButtons = {}
 
-    if isMobile then
-        local MobileSupport = player.PlayerGui:FindFirstChild("MobileSupport")
-        if MobileSupport then
-            local objects = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            for _, obj in pairs(objects) do
-                if obj:IsA("GuiButton") and obj.Name:upper() == bindSalvo then
-                    return true
-                end
+task.spawn(function()
+    task.wait(2)
+
+    local pg = player:FindFirstChild("PlayerGui")
+    local ms = pg and pg:FindFirstChild("MobileSupport")
+    local frame = ms and ms:FindFirstChild("Frame")
+
+    if frame then
+        for _,v in pairs(frame:GetChildren()) do
+            if v:IsA("GuiButton") and v.Name:sub(-6) == "Button" then
+                MobileButtons[v.Name] = v
             end
         end
-    else
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            return input.KeyCode.Name:upper() == bindSalvo
+    end
+end)
+
+-- ==========================================
+-- CHECK BIND (PC + MOBILE)
+-- ==========================================
+
+local function checkBind(input, action)
+    local cfg = getCfg()
+    if not (cfg and cfg.Misc and cfg.Misc[action] and cfg.Misc[action].Enabled) then
+        return false
+    end
+
+    local key = tostring(cfg.Misc[action].Key)
+
+    -- PC
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        return input.KeyCode.Name == key
+    end
+
+    -- MOBILE
+    if input.UserInputType == Enum.UserInputType.Touch then
+        local objects = player.PlayerGui:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+        for _,obj in pairs(objects) do
+            if obj:IsA("GuiButton") and obj.Name == key then
+                return true
+            end
         end
     end
 
     return false
 end
 
--- // AUTO STEAL
-local function executarAutoSteal()
-    local hrp, ball = getHRP(), getBall()
-    if not (hrp and ball and Tackle) then return end
+-- ==========================================
+-- AUTO STEAL (FINAL FIX)
+-- ==========================================
+
+local function autoSteal()
+    local hrp = getHRP()
+    local ball = getBall()
+    if not (hrp and ball) then return end
+
+    local stateInicial = ball:GetAttribute("State")
+
+    if stateInicial == player.Name then return end
+    if stateInicial == "UNTOUCHABLE" then return end
 
     local oldPos = hrp.CFrame
+    local startTime = tick()
+    local deuTackle = false
 
-    local vel = ball.AssemblyLinearVelocity.Magnitude
-    local isFast = vel > 25
-
-    local predictedPos = ball.Position + (ball.AssemblyLinearVelocity * 0.15)
-
-    tpSeguro(predictedPos + Vector3.new(0, 2, 0))
-
-    for i = 1, 50 do
-        Tackle:FireServer()
+    local function getPred()
+        return ball.Position + (ball.AssemblyLinearVelocity * 0.15)
     end
 
-    if isFast then
-        local start = tick()
-        while ball and (tick() - start < 0.4) do
-            local newPred = ball.Position + (ball.AssemblyLinearVelocity * 0.15)
-            tpSeguro(newPred + Vector3.new(0, 2, 0))
-            task.wait()
+    while ball and ball.Parent do
+        if tick() - startTime > 1.2 then break end
+
+        local stateAtual = ball:GetAttribute("State")
+
+        if stateAtual == "UNTOUCHABLE" then
+            deuTackle = true
+            break
+        end
+
+        if stateAtual == player.Name then
+            break
+        end
+
+        tpSeguro(getPred() + Vector3.new(0,2,0))
+        Tackle:FireServer()
+
+        local vel = ball.AssemblyLinearVelocity
+        if vel.Magnitude > 5 then
+            hrp.AssemblyLinearVelocity = vel.Unit * 90
+        end
+
+        task.wait(0.03)
+    end
+
+    if deuTackle then
+        task.wait(0.05)
+        if getHRP() then
+            tpSeguro(oldPos.Position)
         end
     end
-
-    task.wait(0.05)
-
-    local state = ball:GetAttribute("State")
-    if state == "UNTOUCHABLE" or state == player.Name then
-        tpSeguro(oldPos.Position)
-    end
 end
 
--- // AUTO GOAL
-local function executarAutoGoal()
-    local hrp, ball = getHRP(), getBall()
-    local cfg = getCfg()
+-- ==========================================
+-- CHUTE FORTE
+-- ==========================================
 
-    if not (hrp and ball and Shoot and cfg) then return end
-    if ball:GetAttribute("State") ~= player.Name then return end
+local function chuteForte()
+    local hrp = getHRP()
 
-    local goalPos = Vector3.new(0, 5, -180)
+    local dir = (
+        camera.CFrame.LookVector * 310000 +
+        (camera.CFrame.LookVector + Vector3.new(0,.14,0)) * 10000000
+    ).Unit
 
-    local dir = (goalPos - hrp.Position).Unit
-    local dist = (hrp.Position - goalPos).Magnitude
-
-    local power = 230
-
-    Shoot:FireServer(
-        power,
-        dir,
-        dir,
-        hrp.Position,
-        cfg.Misc.PowerShot.Effect,
-        cfg.Misc.PowerShot.Effect2
-    )
+    Shoot:FireServer(230, dir, dir, hrp.Position, true, true)
 end
 
--- // POWERSHOT (HOLD + 4x)
-local holding = false
-local holdStart = 0
+-- ==========================================
+-- AUTO GOL
+-- ==========================================
+
+local function chuteAutoGol()
+    local hrp = getHRP()
+    local ball = getBall()
+
+    if not ball or ball:GetAttribute("State") ~= player.Name then return end
+
+    local alvo = (player.Team and player.Team.Name == "Red")
+        and Vector3.new(-2261, -25, 1030)
+        or Vector3.new(-2848, -25, 1030)
+
+    local dir = (alvo - hrp.Position).Unit
+
+    Shoot:FireServer(230, dir, dir, hrp.Position, true, true)
+end
+
+-- ==========================================
+-- POWERSHOT
+-- ==========================================
 
 local function startHold()
     local cfg = getCfg()
-    if not (cfg and cfg.Misc.PowerShot.Enabled) then return end
+    if not (cfg.Misc.PowerShot and cfg.Misc.PowerShot.Enabled) then return end
 
-    holding = true
-    holdStart = tick()
+    segurandoM2 = true
+    tempoM2 = tick()
 end
 
 local function endHold()
     local cfg = getCfg()
-    if not (holding and cfg and cfg.Misc.PowerShot.Enabled) then return end
+    if not (segurandoM2 and cfg.Misc.PowerShot.Enabled) then return end
 
-    local held = tick() - holdStart
-    holding = false
+    local holdTime = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
 
-    local holdReq = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.47
-    if held < holdReq then return end
+    if (tick() - tempoM2) >= holdTime then
+        if disparoPendente then return end
+        disparoPendente = true
 
-    local hrp = getHRP()
-    if not hrp then return end
-
-    local pwr = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local dir = (camera.CFrame.LookVector * 310000 + (camera.CFrame.LookVector + Vector3.new(0, 0.14, 0)) * 10000000).Unit
-
-    -- DISPARA 4x
-    for i = 1, 4 do
-        Shoot:FireServer(
-            pwr,
-            dir,
-            dir,
-            hrp.Position,
-            cfg.Misc.PowerShot.Effect,
-            cfg.Misc.PowerShot.Effect2
-        )
-        task.wait(0.03)
+        task.delay(0.01, function()
+            for i = 1, 4 do
+                chuteForte()
+                task.wait(0.03)
+            end
+            disparoPendente = false
+        end)
     end
+
+    segurandoM2 = false
 end
 
--- // INPUTS
-UIS.InputBegan:Connect(function(input, processed)
-    if processed then return end
+-- ==========================================
+-- INPUT
+-- ==========================================
 
-    if checkBind(input, "Misc", "AutoSteal") then
-        executarAutoSteal()
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe or not ativo then return end
+
+    if checkBind(input, "AutoSteal") then
+        autoSteal()
     end
 
-    if checkBind(input, "Misc", "AutoGoal") then
-        executarAutoGoal()
+    if checkBind(input, "AutoGoal") then
+        chuteAutoGol()
     end
 
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -183,21 +262,21 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- MOBILE SHOOT BUTTON
+-- MOBILE SHOOT BUTTON (GARANTIDO)
 task.spawn(function()
     task.wait(2)
 
-    local ms = player.PlayerGui:FindFirstChild("MobileSupport")
-    local frame = ms and ms:FindFirstChild("Frame")
-    local btn = frame and frame:FindFirstChild("ShootButton")
-
+    local btn = MobileButtons["ShootButton"]
     if btn then
         btn.MouseButton1Down:Connect(startHold)
         btn.MouseButton1Up:Connect(endHold)
     end
 end)
 
--- LOOP ATTRIBUTES
+-- ==========================================
+-- LOOP
+-- ==========================================
+
 task.spawn(function()
     while task.wait(1) do
         local cfg = getCfg()
@@ -210,4 +289,4 @@ task.spawn(function()
     end
 end)
 
-print(">> [RRR] SISTEMA FINAL ATIVO!")
+print(">> [RRR] MOBILE BUTTON FILTER ATIVO 🔥")
