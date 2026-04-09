@@ -161,30 +161,39 @@ local function autoGoal()
         return ball.Position + (ball.AssemblyLinearVelocity * 0.15)
     end
 
+    -- Loop para tentar roubar a bola
     while ball and ball.Parent do
         if tick() - startTime > 1.2 then break end
 
-        if ball:GetAttribute("State") == "UNTOUCHABLE" then
+        -- Verifica se a bola ficou intocável (alguém pegou/bateu) 
+        -- ou se já está com o jogador
+        if ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then
             conseguiu = true
             break
         end
 
-        tpSeguro(getPred() + Vector3.new(0,2,0))
+        tpSeguro(getPred() + Vector3.new(0, 2, 0))
         Tackle:FireServer()
 
         task.wait(0.03)
     end
 
+    -- Se não conseguiu pegar a bola no tempo limite, para aqui
     if not conseguiu then return end
 
-    task.wait(0.05)
+    -- Espera o IFrame / Tempo de posse (Sincronização com o servidor)
+    task.wait(1) 
 
+    -- Teleporta para a posição de chute
     local goalPos = (player.Team and player.Team.Name == "Red")
         and GOAL_TP_BLUE or GOAL_TP_RED
 
     tpSeguro(goalPos)
 
-    task.wait(0.1)
+    -- Pequena pausa para garantir que o HRP estabilizou na nova posição
+    task.wait(1)
+    
+    -- Executa o chute
     chuteEntreTraves()
 end
 
