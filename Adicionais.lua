@@ -151,50 +151,40 @@ local function autoGoal()
     if not (hrp and ball) then return end
 
     local stateInicial = ball:GetAttribute("State")
-    if stateInicial == player.Name then return end
-    if stateInicial == "UNTOUCHABLE" then return end
+    if stateInicial == player.Name or stateInicial == "UNTOUCHABLE" then return end
 
     local startTime = tick()
-    local conseguiu = false
+    local conseguiuPegar = false
 
-    local function getPred()
-        return ball.Position + (ball.AssemblyLinearVelocity * 0.15)
-    end
-
-    -- Loop para tentar roubar a bola
+    -- 1. Tentativa de Roubo (Tackle)
     while ball and ball.Parent do
         if tick() - startTime > 1.2 then break end
 
-        -- Verifica se a bola ficou intocável (alguém pegou/bateu) 
-        -- ou se já está com o jogador
-        if ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then
-            conseguiu = true
+        -- Se a bola ficou UNTOUCHABLE, significa que o seu Tackle conectou
+        if ball:GetAttribute("State") == "UNTOUCHABLE" then
+            conseguiuPegar = true
             break
         end
 
-        tpSeguro(getPred() + Vector3.new(0, 2, 0))
+        tpSeguro(ball.Position + Vector3.new(0, 2, 0))
         Tackle:FireServer()
-
         task.wait(0.03)
     end
 
-    -- Se não conseguiu pegar a bola no tempo limite, para aqui
-    if not conseguiu then return end
+    -- 2. Se pegou, teleporta IMEDIATAMENTE (ainda dentro do IFrame)
+    if conseguiuPegar then
+        local goalPos = (player.Team and player.Team.Name == "Red")
+            and GOAL_TP_BLUE or GOAL_TP_RED
 
-    -- Espera o IFrame / Tempo de posse (Sincronização com o servidor)
-    task.wait(1) 
+        -- Teleporte instantâneo para o gol adversário
+        tpSeguro(goalPos)
 
-    -- Teleporta para a posição de chute
-    local goalPos = (player.Team and player.Team.Name == "Red")
-        and GOAL_TP_BLUE or GOAL_TP_RED
+        -- 3. Agora espera o tempo de 1s que você pediu (IFrame saindo)
+        task.wait(1)
 
-    tpSeguro(goalPos)
-
-    -- Pequena pausa para garantir que o HRP estabilizou na nova posição
-    task.wait(1)
-    
-    -- Executa o chute
-    chuteEntreTraves()
+        -- 4. Chuta entre as traves
+        chuteEntreTraves()
+    end
 end
 
 -- ==========================================
