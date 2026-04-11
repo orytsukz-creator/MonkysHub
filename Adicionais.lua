@@ -114,15 +114,15 @@ local function autoGoal()
         local targets = (player.Team.Name == "Red") and {TRAVE_BLUE_1, TRAVE_BLUE_2} or {TRAVE_RED_1, TRAVE_RED_2}
         local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
         local dir = ((targets[1] + targets[2])/2 - getHRP().Position).Unit
-        -- Aqui no AutoGoal mantive true/true por padrão, ou você quer os Effects aqui também?
         Shoot:FireServer(forca, dir + Vector3.new(0,0.13,0), dir, getHRP().Position, true, true)
     end
 end
 
 -- ==========================================
--- POWER SHOT LOGIC (COM EFFECT 1 E 2)
+-- POWER SHOT LOGIC (FIXED)
 -- ==========================================
-local isHolding, holdStart = false, 0
+local isHolding = false
+local holdStart = 0
 
 local function performPowerShot()
     local cfg = getCfg()
@@ -130,9 +130,8 @@ local function performPowerShot()
     if not hrp then return end
 
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
-    -- PEGA OS EFEITOS DA CONFIG AQUI:
-    local eff1 = cfg.Misc.PowerShot.Effect
-    local eff2 = cfg.Misc.PowerShot.Effect2
+    local eff1 = cfg.Misc.PowerShot.Effect1.Enabled
+    local eff2 = cfg.Misc.PowerShot.Effect2.Enabled
     
     local camDir = camera.CFrame.LookVector
     local dir = (camDir * 310000 + (camDir + Vector3.new(0,0.14,0)) * 10000000).Unit
@@ -143,33 +142,59 @@ local function performPowerShot()
     end
 end
 
--- ==========================================
--- INPUTS E MOBILE SYNC
--- ==========================================
 local function startPower()
-    if getCfg().Misc.PowerShot.Enabled == true then isHolding, holdStart = true, tick() end
+    local cfg = getCfg()
+    if cfg.Misc.PowerShot.Enabled == true then
+        isHolding = true
+        holdStart = tick()
+        print(">> PowerShot: Segurando...")
+    end
 end
 
 local function endPower()
     if not isHolding then return end
     isHolding = false
-    if (tick() - holdStart) >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47) then performPowerShot() end
+    
+    local cfg = getCfg()
+    local duration = tick() - holdStart
+    local needed = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.45
+    
+    print(">> PowerShot: Soltou. Tempo segurado: " .. tostring(duration) .. " | Necessário: " .. tostring(needed))
+
+    if duration >= needed then
+        performPowerShot()
+        print(">> PowerShot: DISPARADO ✅")
+    else
+        print(">> PowerShot: Tempo insuficiente ❌")
+    end
 end
 
+-- ==========================================
+-- INPUTS E MOBILE SYNC
+-- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     local cfg = getCfg()
     local key = input.KeyCode.Name
+    
     if key == tostring(cfg.Misc.AutoSteal.Key) then autoSteal()
     elseif key == tostring(cfg.Misc.AutoGoal.Key) then autoGoal()
     elseif key == tostring(cfg.Player.CancelCutscene.Key) then cancelCutscene()
-    elseif key == tostring(cfg.Player.FakeFlow.Key) then cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled updatePlayerAttributes()
-    elseif key == tostring(cfg.Player.FakeMetavision.Key) then cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled updatePlayerAttributes()
-    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then startPower() end
+    elseif key == tostring(cfg.Player.FakeFlow.Key) then 
+        cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled 
+        updatePlayerAttributes()
+    elseif key == tostring(cfg.Player.FakeMetavision.Key) then 
+        cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled 
+        updatePlayerAttributes()
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        startPower() 
+    end
 end)
 
 UIS.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then endPower() end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        endPower() 
+    end
 end)
 
 if UIS.TouchEnabled then
@@ -184,16 +209,20 @@ if UIS.TouchEnabled then
         local cancelBtn = findBtn(cfg.Player.CancelCutscene.Key, "CancelButton")
         local flowBtn = findBtn(cfg.Player.FakeFlow.Key, "FlowButton")
         local mvBtn = findBtn(cfg.Player.FakeMetavision.Key, "MVButton")
-        local shootBtn = findBtn("Shoot", "ShootButton")
+        local shootBtn = findBtn("Shoot", "ShootButton") -- Tenta achar o botão de chute
 
         if stealBtn then stealBtn.MouseButton1Click:Connect(autoSteal) end
         if goalBtn then goalBtn.MouseButton1Click:Connect(autoGoal) end
         if cancelBtn then cancelBtn.MouseButton1Click:Connect(cancelCutscene) end
         if flowBtn then flowBtn.MouseButton1Click:Connect(function() cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled updatePlayerAttributes() end) end
         if mvBtn then mvBtn.MouseButton1Click:Connect(function() cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled updatePlayerAttributes() end) end
-        if shootBtn then shootBtn.MouseButton1Down:Connect(startPower) shootBtn.MouseButton1Up:Connect(endPower) end
+        
+        if shootBtn then 
+            shootBtn.MouseButton1Down:Connect(startPower) 
+            shootBtn.MouseButton1Up:Connect(endPower) 
+        end
     end)
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
-print(">> SCRIPT FULL: EFEITOS DO POWER SHOT SINCRONIZADOS ✅")
+print(">> SCRIPT FULL: POWER SHOT LOGIC REPARADA ✅")
