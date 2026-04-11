@@ -131,8 +131,8 @@ local function performPowerShot()
 
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
     -- PEGA OS EFEITOS DA CONFIG AQUI:
-    local eff1 = cfg.Misc.PowerShot.Effect1.Enabled
-    local eff2 = cfg.Misc.PowerShot.Effect2.Enabled
+    local eff1 = cfg.Misc.PowerShot.Effect
+    local eff2 = cfg.Misc.PowerShot.Effect2
     
     local camDir = camera.CFrame.LookVector
     local dir = (camDir * 310000 + (camDir + Vector3.new(0,0.14,0)) * 10000000).Unit
@@ -153,7 +153,7 @@ end
 local function endPower()
     if not isHolding then return end
     isHolding = false
-    if (tick() - holdStart) >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.45) then performPowerShot() end
+    if (tick() - holdStart) >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47) then performPowerShot() end
 end
 
 UIS.InputBegan:Connect(function(input, gpe)
