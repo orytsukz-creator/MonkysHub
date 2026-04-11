@@ -37,12 +37,13 @@ local TRAVE_BLUE_1, TRAVE_BLUE_2 = Vector3.new(-2202, -25, 1010), Vector3.new(-2
 local GOAL_TP_RED, GOAL_TP_BLUE = Vector3.new(-2848, -25, 1030), Vector3.new(-2261, -25, 1030)
 
 -- ==========================================
--- PLAYER ATTRIBUTES (FLOW / MV)
+-- PLAYER ATTRIBUTES (SYCHRONIZED)
 -- ==========================================
 local function updatePlayerAttributes()
     local cfg = getCfg()
-    player:SetAttribute("Flow", cfg.Player.FakeFlow.Enabled)
-    player:SetAttribute("Metavision", cfg.Player.FakeMetavision.Enabled)
+    -- Conforme sua tabela: FakeFlow e FakeMetavision são booleanos diretos
+    player:SetAttribute("Flow", cfg.Player.FakeFlow)
+    player:SetAttribute("Metavision", cfg.Player.FakeMetavision)
 end
 
 -- ==========================================
@@ -81,7 +82,7 @@ local function cancelCutscene()
 end
 
 -- ==========================================
--- AUTO STEAL & AUTO GOAL (RESTAURADO)
+-- AUTO STEAL & AUTO GOAL
 -- ==========================================
 local function autoSteal()
     local cfg = getCfg()
@@ -109,16 +110,15 @@ local function chuteEntreTraves()
     if not hrp then return end
     
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local alvo1, alvo2 = (player.Team and player.Team.Name == "Red") and {TRAVE_BLUE_1, TRAVE_BLUE_2} or {TRAVE_RED_1, TRAVE_RED_2}
+    local targets = (player.Team and player.Team.Name == "Red") and {TRAVE_BLUE_1, TRAVE_BLUE_2} or {TRAVE_RED_1, TRAVE_RED_2}
     
-    local centro = (alvo1[1] + alvo1[2]) / 2
-    local lado = (alvo1[2] - alvo1[1]).Unit
+    local centro = (targets[1] + targets[2]) / 2
+    local lado = (targets[2] - targets[1]).Unit
     local dot = (hrp.Position - centro):Dot(lado)
-    local alvoFinal = (dot > 0) and alvo1[1] or alvo1[2]
+    local alvoFinal = (dot > 0) and targets[1] or targets[2]
 
-    -- LÓGICA DO DIR ORIGINAL RESTAURADA AQUI
     local dir = (alvoFinal - hrp.Position).Unit
-    dir = (dir + Vector3.new(0, 0.131, 0)).Unit -- O Y que faz a bola subir
+    dir = (dir + Vector3.new(0, 0.131, 0)).Unit -- Direção original mantida
 
     Shoot:FireServer(forca, dir, dir, hrp.Position, true, true)
 end
@@ -126,7 +126,6 @@ end
 local function autoGoal()
     local cfg = getCfg()
     if cfg.Misc.AutoGoal.Enabled ~= true then return end
-
     local hrp, ball = getHRP(), getBall()
     if not (hrp and ball) then return end
 
@@ -139,10 +138,9 @@ local function autoGoal()
     end
 
     if conseguiu then
-        local goalPos = (player.Team and player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED
-        tpSeguro(goalPos)
+        tpSeguro((player.Team.Name == "Red") and GOAL_TP_BLUE or GOAL_TP_RED)
         task.wait(1)
-        chuteEntreTraves() -- Usa a função de chute com o DIR correto
+        chuteEntreTraves()
     end
 end
 
@@ -157,8 +155,9 @@ local function performPowerShot()
     if not hrp then return end
 
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local eff = cfg.Misc.PowerShot.Effect.Enabled
-    local eff2 = cfg.Misc.PowerShot.Effect2.Enabled
+    -- Conforme sua tabela: Effect e Effect2 são booleanos diretos
+    local eff = cfg.Misc.PowerShot.Effect
+    local eff2 = cfg.Misc.PowerShot.Effect2
     
     local camDir = camera.CFrame.LookVector
     local dir = (camDir * 310000 + (camDir + Vector3.new(0,0.14,0)) * 10000000).Unit
@@ -170,14 +169,21 @@ local function performPowerShot()
 end
 
 local function startPower()
-    if getCfg().Misc.PowerShot.Enabled == true then isHolding, holdStart = true, tick() end
+    if getCfg().Misc.PowerShot.Enabled == true then 
+        isHolding = true 
+        holdStart = tick() 
+    end
 end
 
 local function endPower()
     if not isHolding then return end
     isHolding = false
     local duration = tick() - holdStart
-    if duration >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.45) then performPowerShot() end
+    local needed = tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47
+    
+    if duration >= needed then 
+        performPowerShot() 
+    end
 end
 
 -- ==========================================
@@ -191,10 +197,6 @@ UIS.InputBegan:Connect(function(input, gpe)
     if key == tostring(cfg.Misc.AutoSteal.Key) then autoSteal()
     elseif key == tostring(cfg.Misc.AutoGoal.Key) then autoGoal()
     elseif key == tostring(cfg.Player.CancelCutscene.Key) then cancelCutscene()
-    elseif key == tostring(cfg.Player.FakeFlow.Key) then 
-        cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled updatePlayerAttributes()
-    elseif key == tostring(cfg.Player.FakeMetavision.Key) then 
-        cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled updatePlayerAttributes()
     elseif input.UserInputType == Enum.UserInputType.MouseButton2 then startPower() end
 end)
 
@@ -202,6 +204,7 @@ UIS.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then endPower() end
 end)
 
+-- Mobile Support
 if UIS.TouchEnabled then
     task.spawn(function()
         local frame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 15):WaitForChild("Frame")
@@ -211,18 +214,14 @@ if UIS.TouchEnabled then
         local sB = fBtn(cfg.Misc.AutoSteal.Key, "StealButton")
         local gB = fBtn(cfg.Misc.AutoGoal.Key, "GoalButton")
         local cB = fBtn(cfg.Player.CancelCutscene.Key, "CancelButton")
-        local flB = fBtn(cfg.Player.FakeFlow.Key, "FlowButton")
-        local mvB = fBtn(cfg.Player.FakeMetavision.Key, "MVButton")
         local shB = fBtn("Shoot", "ShootButton")
 
         if sB then sB.MouseButton1Click:Connect(autoSteal) end
         if gB then gB.MouseButton1Click:Connect(autoGoal) end
         if cB then cB.MouseButton1Click:Connect(cancelCutscene) end
-        if flB then flB.MouseButton1Click:Connect(function() cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled updatePlayerAttributes() end) end
-        if mvB then mvB.MouseButton1Click:Connect(function() cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled updatePlayerAttributes() end) end
         if shB then shB.MouseButton1Down:Connect(startPower) shB.MouseButton1Up:Connect(endPower) end
     end)
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
-print(">> SCRIPT FULL: AUTO GOL RESTAURADO E POWER SHOT FIX ✅")
+print(">> SCRIPT FULL: CONFIGURAÇÃO SINCRONIZADA COM A TABELA ✅")
