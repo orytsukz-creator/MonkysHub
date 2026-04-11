@@ -164,7 +164,7 @@ local function performPowerShot()
     
     for i = 1, 4 do 
         Shoot:FireServer(forca, dir, dir, hrp.Position, eff, eff2) 
-        task.wait(0.02) 
+        task.wait(0.01) 
     end
 end
 
