@@ -1,5 +1,5 @@
 -- ==========================================
--- SERVICES
+-- SERVICES V2
 -- ==========================================
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -46,21 +46,34 @@ local function updatePlayerAttributes()
 end
 
 -- ==========================================
--- CANCEL CUTSCENE
+-- CANCEL CUTSCENE (FULL RESET)
 -- ==========================================
 local function cancelCutscene()
     local cfg = getCfg()
     if cfg.Player.CancelCutscene.Enabled ~= true then return end
 
-    camera.CameraType = Enum.CameraType.Custom
-    camera.CameraSubject = getChar():WaitForChild("Humanoid")
+    local char = getChar()
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
 
-    local hum = getChar():FindFirstChildOfClass("Humanoid")
+    -- 1. Reset de Câmera
+    camera.CameraType = Enum.CameraType.Custom
+    camera.CameraSubject = hum
+
+    -- 2. Reset Físico (WalkSpeed, JumpPower e Anchored)
     if hum then
         hum.WalkSpeed = 40
         hum.JumpPower = 60
     end
+    if hrp then
+        hrp.Anchored = false
+    end
 
+    -- 3. Reset de Atributos de Ação
+    player:SetAttribute("CanShoot", true)
+    player:SetAttribute("IsCasting", false)
+
+    -- 4. Parar animações de todos localmente
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character then
             local p_hum = p.Character:FindFirstChildOfClass("Humanoid")
@@ -119,10 +132,9 @@ local function autoGoal()
 end
 
 -- ==========================================
--- POWER SHOT LOGIC (FIXED)
+-- POWER SHOT LOGIC
 -- ==========================================
-local isHolding = false
-local holdStart = 0
+local isHolding, holdStart = false, 0
 
 local function performPowerShot()
     local cfg = getCfg()
@@ -147,7 +159,6 @@ local function startPower()
     if cfg.Misc.PowerShot.Enabled == true then
         isHolding = true
         holdStart = tick()
-        print(">> PowerShot: Segurando...")
     end
 end
 
@@ -159,18 +170,13 @@ local function endPower()
     local duration = tick() - holdStart
     local needed = tonumber(cfg.Misc.PowerShot.HoldTime) or 0.45
     
-    print(">> PowerShot: Soltou. Tempo segurado: " .. tostring(duration) .. " | Necessário: " .. tostring(needed))
-
     if duration >= needed then
         performPowerShot()
-        print(">> PowerShot: DISPARADO ✅")
-    else
-        print(">> PowerShot: Tempo insuficiente ❌")
     end
 end
 
 -- ==========================================
--- INPUTS E MOBILE SYNC
+-- INPUTS (PC & MOBILE SYNC)
 -- ==========================================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
@@ -209,20 +215,16 @@ if UIS.TouchEnabled then
         local cancelBtn = findBtn(cfg.Player.CancelCutscene.Key, "CancelButton")
         local flowBtn = findBtn(cfg.Player.FakeFlow.Key, "FlowButton")
         local mvBtn = findBtn(cfg.Player.FakeMetavision.Key, "MVButton")
-        local shootBtn = findBtn("Shoot", "ShootButton") -- Tenta achar o botão de chute
+        local shootBtn = findBtn("Shoot", "ShootButton")
 
         if stealBtn then stealBtn.MouseButton1Click:Connect(autoSteal) end
         if goalBtn then goalBtn.MouseButton1Click:Connect(autoGoal) end
         if cancelBtn then cancelBtn.MouseButton1Click:Connect(cancelCutscene) end
         if flowBtn then flowBtn.MouseButton1Click:Connect(function() cfg.Player.FakeFlow.Enabled = not cfg.Player.FakeFlow.Enabled updatePlayerAttributes() end) end
         if mvBtn then mvBtn.MouseButton1Click:Connect(function() cfg.Player.FakeMetavision.Enabled = not cfg.Player.FakeMetavision.Enabled updatePlayerAttributes() end) end
-        
-        if shootBtn then 
-            shootBtn.MouseButton1Down:Connect(startPower) 
-            shootBtn.MouseButton1Up:Connect(endPower) 
-        end
+        if shootBtn then shootBtn.MouseButton1Down:Connect(startPower) shootBtn.MouseButton1Up:Connect(endPower) end
     end)
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
-print(">> SCRIPT FULL: POWER SHOT LOGIC REPARADA ✅")
+print(">> SCRIPT FULL: CANCEL CUTSCENE COM ATRIBUTOS ✅")
