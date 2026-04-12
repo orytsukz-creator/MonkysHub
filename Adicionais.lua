@@ -75,12 +75,13 @@ local function cancelCutscene()
 end
 
 -- ==========================================
--- AUTO GOL DINÂMICO (LONGE .17 | PERTO .05)
+-- AUTO GOL DINÂMICO (LONGE .3 | PERTO .07)
 -- ==========================================
 local function realizarChuteAutoGol()
     local hrp = getHRP()
     if not hrp then return end
 
+    -- Sorteio de canto
     local sorteio = math.random()
     if sorteio > 0.3 and sorteio < 0.7 then
         sorteio = (sorteio < 0.5) and 0.15 or 0.85
@@ -95,22 +96,27 @@ local function realizarChuteAutoGol()
 
     local distancia = (alvoFinal - hrp.Position).Magnitude
     
-    -- Lógica Dinâmica: Longe = .17 | Perto = .05
-    local alturaDinamica = 0.05
+    -- NOVA LÓGICA Y SOLICITADA:
+    -- Perto (< 50 studs): .07
+    -- Longe (> 200 studs): .3
+    local alturaDinamica = 0.07
     if distancia > 50 then
         local progresso = math.clamp((distancia - 50) / 150, 0, 1)
-        alturaDinamica = 0.05 + (progresso * 0.12)
+        alturaDinamica = 0.07 + (progresso * 0.23) -- Sobe até .30
     end
 
     local direcaoHorizontal = Vector3.new(alvoFinal.X - hrp.Position.X, 0, alvoFinal.Z - hrp.Position.Z).Unit
     local dirBase = Vector3.new(direcaoHorizontal.X, alturaDinamica, direcaoHorizontal.Z).Unit
-    local dirImpulso = Vector3.new(dirBase.X * 3.5, dirBase.Y, dirBase.Z * 3.5)
+    
+    -- Impulso 3.5x com Y normalizado
+    local impulsoBruto = dirBase * 3.5
+    local dirImpulso = Vector3.new(impulsoBruto.X, impulsoBruto.Y / 3.5, impulsoBruto.Z)
 
     Shoot:FireServer(230, dirBase, dirImpulso, hrp.Position, true, true)
 end
 
 -- ==========================================
--- ABA MISC
+-- ABA MISC (STEAL COM RETORNO)
 -- ==========================================
 local function autoSteal()
     local cfg = getCfg()
@@ -132,7 +138,7 @@ local function autoSteal()
     end
 
     task.wait(0.1)
-    tpSeguro(oldPos)
+    tpSeguro(oldPos) -- Volta para a posição original
     Ativo.Steal = false
 end
 
@@ -154,7 +160,7 @@ local function performPowerShot()
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
     local camDir = camera.CFrame.LookVector
     local dirBase = (camDir + Vector3.new(0, 0.131, 0)).Unit
-    local dirImpulso = dirBase * 1.2
+    local dirImpulso = dirBase * 1.2 -- 1.2x Magnitude
 
     Shoot:FireServer(forca, dirBase, dirImpulso, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
     task.wait(0.3)
@@ -174,7 +180,7 @@ local function endPower()
     if not isHolding then return end
     isHolding = false
     if (tick() - holdStart) >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47) then 
-        task.wait(0.01)
+        task.wait(0.01) -- Delay de .01s
         performPowerShot() 
     end
 end
@@ -195,7 +201,7 @@ UIS.InputEnded:Connect(function(input)
 end)
 
 -- ==========================================
--- MOBILE SUPPORT (BOTÕES PERSONALIZADOS)
+-- MOBILE SUPPORT (BOTÕES DINÂMICOS)
 -- ==========================================
 if UIS.TouchEnabled then
     task.spawn(function()
@@ -203,7 +209,6 @@ if UIS.TouchEnabled then
         local frame = mobileGui:WaitForChild("Frame")
         local cfg = getCfg()
         
-        -- Procura os botões usando o nome definido na Config (Key)
         local stealBtn = frame:FindFirstChild(tostring(cfg.Misc.AutoSteal.Key))
         local goalBtn = frame:FindFirstChild(tostring(cfg.Misc.AutoGoal.Key))
         local cancelBtn = frame:FindFirstChild(tostring(cfg.Player.CancelCutscene.Key))
@@ -220,4 +225,4 @@ if UIS.TouchEnabled then
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
-print(">> Script Mobile Corrigido (Botões Dinâmicos) ✅")
+print(">> Script Atualizado: Y (.07 a .3) | PowerShot 1.2x ✅")
