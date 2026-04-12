@@ -162,7 +162,7 @@ local function performPowerShot()
     
     local camDir = camera.CFrame.LookVector
     local dirBase = (camDir + Vector3.new(0, 0.131, 0)).Unit
-    local dirImpulso = dirBase * 9000
+    local dirImpulso = dirBase * 1.2
 
     Shoot:FireServer(forca, dirBase, dirImpulso, hrp.Position, eff, eff2)
 end
