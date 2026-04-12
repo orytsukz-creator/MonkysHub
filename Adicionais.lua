@@ -186,6 +186,7 @@ local function endPower()
     local needed = tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47
     
     if duration >= needed then 
+        task.wait(.02)
         performPowerShot() 
     end
 end
