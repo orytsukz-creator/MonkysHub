@@ -32,7 +32,7 @@ local function tpSeguro(pos)
     if not hrp then return end
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
-    hrp.CFrame = pos -- Usa CFrame completo para manter a rotação
+    hrp.CFrame = pos
 end
 
 -- ==========================================
@@ -42,7 +42,7 @@ local Shoot = ReplicatedStorage:WaitForChild("ShootRE")
 local Tackle = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Tackle")
 
 -- ==========================================
--- ABA PLAYER
+-- PLAYER ATTRIBUTES
 -- ==========================================
 local function updatePlayerAttributes()
     local cfg = getCfg()
@@ -66,15 +66,16 @@ local function cancelCutscene()
     player:SetAttribute("IsCasting", false)
 
     for _, p in pairs(Players:GetPlayers()) do
-        if p.Character then
-            local p_hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if p_hum then for _, anim in pairs(p_hum:GetPlayingAnimationTracks()) do anim:Stop() end end
+        if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then
+            for _, anim in pairs(p.Character:FindFirstChildOfClass("Humanoid"):GetPlayingAnimationTracks()) do 
+                anim:Stop() 
+            end
         end
     end
 end
 
 -- ==========================================
--- LÓGICA DE CHUTE (AUTO GOL DINÂMICO)
+-- AUTO GOL DINÂMICO (LONGE .17 | PERTO .05)
 -- ==========================================
 local function realizarChuteAutoGol()
     local hrp = getHRP()
@@ -93,16 +94,17 @@ local function realizarChuteAutoGol()
     end
 
     local distancia = (alvoFinal - hrp.Position).Magnitude
-    local alturaDinamica = 0.1 
-    if distancia < 100 then
-        local bonus = (1 - (distancia / 100)) * 0.05
-        alturaDinamica = math.clamp(0.1 + bonus, 0.1, 0.15)
+    
+    -- Lógica Dinâmica: Longe = .17 | Perto = .05
+    local alturaDinamica = 0.05
+    if distancia > 50 then
+        local progresso = math.clamp((distancia - 50) / 150, 0, 1)
+        alturaDinamica = 0.05 + (progresso * 0.12)
     end
 
     local direcaoHorizontal = Vector3.new(alvoFinal.X - hrp.Position.X, 0, alvoFinal.Z - hrp.Position.Z).Unit
     local dirBase = Vector3.new(direcaoHorizontal.X, alturaDinamica, direcaoHorizontal.Z).Unit
-    local impulsoBruto = dirBase * 3.5
-    local dirImpulso = Vector3.new(impulsoBruto.X, impulsoBruto.Y / 3.5, impulsoBruto.Z)
+    local dirImpulso = Vector3.new(dirBase.X * 3.5, dirBase.Y, dirBase.Z * 3.5)
 
     Shoot:FireServer(230, dirBase, dirImpulso, hrp.Position, true, true)
 end
@@ -116,32 +118,30 @@ local function autoSteal()
     local hrp, ball = getHRP(), getBall()
     if not (hrp and ball) then return end
     
-    local state = ball:GetAttribute("State")
-    if state == player.Name or state == "UNTOUCHABLE" then return end
-
     Ativo.Steal = true
-    local oldPos = hrp.CFrame -- SALVA A POSIÇÃO ANTES DE IR
+    local oldPos = hrp.CFrame
     local startTime = tick()
 
     while ball and ball.Parent and (tick() - startTime < 1.2) do
-        if ball:GetAttribute("State") == "UNTOUCHABLE" or ball:GetAttribute("State") == player.Name then break end
+        local state = ball:GetAttribute("State")
+        if state == "UNTOUCHABLE" or state == player.Name then break end
+        
         tpSeguro(CFrame.new(ball.Position + (ball.AssemblyLinearVelocity * 0.15) + Vector3.new(0,2,0)))
         Tackle:FireServer()
         task.wait(0.03)
     end
 
-    task.wait(0.05)
-    tpSeguro(oldPos) -- VOLTA PARA A POSIÇÃO ORIGINAL
+    task.wait(0.1)
+    tpSeguro(oldPos)
     Ativo.Steal = false
 end
 
 local function autoGoal()
     local cfg = getCfg()
     if cfg.Misc.AutoGoal.Enabled ~= true or Ativo.Goal then return end
-    
     Ativo.Goal = true
-    realizarChuteAutoGol() -- Chute direto sem TP, conforme solicitado
-    task.wait(0.5) -- Pequeno delay para evitar spam do chute
+    realizarChuteAutoGol()
+    task.wait(0.5)
     Ativo.Goal = false
 end
 
@@ -152,13 +152,11 @@ local function performPowerShot()
 
     Ativo.Shot = true
     local forca = tonumber(cfg.Misc.PowerShot.Power) or 230
-    local eff, eff2 = cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2
-    
     local camDir = camera.CFrame.LookVector
     local dirBase = (camDir + Vector3.new(0, 0.131, 0)).Unit
-    local dirImpulso = dirBase * 1.2 -- Magnitude de velocidade
+    local dirImpulso = dirBase * 1.2
 
-    Shoot:FireServer(forca, dirBase, dirImpulso, hrp.Position, eff, eff2)
+    Shoot:FireServer(forca, dirBase, dirImpulso, hrp.Position, cfg.Misc.PowerShot.Effect, cfg.Misc.PowerShot.Effect2)
     task.wait(0.3)
     Ativo.Shot = false
 end
@@ -175,11 +173,8 @@ end
 local function endPower()
     if not isHolding then return end
     isHolding = false
-    local duration = tick() - holdStart
-    local needed = tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47
-    
-    if duration >= needed then 
-        task.wait(0.01) -- DELAY DE .01s SOLICITADO
+    if (tick() - holdStart) >= (tonumber(getCfg().Misc.PowerShot.HoldTime) or 0.47) then 
+        task.wait(0.01)
         performPowerShot() 
     end
 end
@@ -199,22 +194,30 @@ UIS.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton2 then endPower() end
 end)
 
--- Mobile Support
+-- ==========================================
+-- MOBILE SUPPORT (BOTÕES PERSONALIZADOS)
+-- ==========================================
 if UIS.TouchEnabled then
     task.spawn(function()
-        local frame = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 15):WaitForChild("Frame")
+        local mobileGui = player:WaitForChild("PlayerGui"):WaitForChild("MobileSupport", 15)
+        local frame = mobileGui:WaitForChild("Frame")
         local cfg = getCfg()
-        local function fBtn(k, d) return frame:FindFirstChild(tostring(k)) or frame:FindFirstChild(d) end
         
-        local sB = fBtn(cfg.Misc.AutoSteal.Key, "StealButton")
-        local gB = fBtn(cfg.Misc.AutoGoal.Key, "GoalButton")
-        local shB = fBtn("Shoot", "ShootButton")
+        -- Procura os botões usando o nome definido na Config (Key)
+        local stealBtn = frame:FindFirstChild(tostring(cfg.Misc.AutoSteal.Key))
+        local goalBtn = frame:FindFirstChild(tostring(cfg.Misc.AutoGoal.Key))
+        local cancelBtn = frame:FindFirstChild(tostring(cfg.Player.CancelCutscene.Key))
+        local shootBtn = frame:FindFirstChild("Shoot") or frame:FindFirstChild("ShootButton")
 
-        if sB then sB.MouseButton1Click:Connect(function() task.spawn(autoSteal) end) end
-        if gB then gB.MouseButton1Click:Connect(function() task.spawn(autoGoal) end) end
-        if shB then shB.MouseButton1Down:Connect(startPower) shB.MouseButton1Up:Connect(endPower) end
+        if stealBtn then stealBtn.MouseButton1Click:Connect(function() task.spawn(autoSteal) end) end
+        if goalBtn then goalBtn.MouseButton1Click:Connect(function() task.spawn(autoGoal) end) end
+        if cancelBtn then cancelBtn.MouseButton1Click:Connect(cancelCutscene) end
+        if shootBtn then 
+            shootBtn.MouseButton1Down:Connect(startPower) 
+            shootBtn.MouseButton1Up:Connect(endPower) 
+        end
     end)
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
-print(">> SCRIPT TOTALMENTE CORRIGIDO: STEAL, GOAL E POWER SHOT ✅")
+print(">> Script Mobile Corrigido (Botões Dinâmicos) ✅")
