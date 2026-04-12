@@ -57,14 +57,24 @@ local function cancelCutscene()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
 
-    camera.CameraType = Enum.CameraType.Custom
+    -- RESET DE CÂMERA ANTI-ANIMATION (MoonAnimator/Scripts)
+    camera.CameraType = Enum.CameraType.Scriptable
+    task.wait() -- Pequena pausa para quebrar o vínculo da animação
     camera.CameraSubject = hum
-    if hum then hum.WalkSpeed = 40 hum.JumpPower = 60 end
+    camera.CameraType = Enum.CameraType.Custom
+    camera.CFrame = hrp and CFrame.new(hrp.Position + Vector3.new(0, 10, 0), hrp.Position) or camera.CFrame
+
+    if hum then 
+        hum.WalkSpeed = 40 
+        hum.JumpPower = 60 
+    end
+    
     if hrp then hrp.Anchored = false end
 
     player:SetAttribute("CanShoot", true)
     player:SetAttribute("IsCasting", false)
 
+    -- Para todas as animações de todos os players (incluindo a sua)
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then
             for _, anim in pairs(p.Character:FindFirstChildOfClass("Humanoid"):GetPlayingAnimationTracks()) do 
