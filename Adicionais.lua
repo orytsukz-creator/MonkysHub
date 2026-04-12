@@ -54,31 +54,34 @@ local function cancelCutscene()
     local cfg = getCfg()
     if cfg.Player.CancelCutscene.Enabled ~= true then return end
     local char = getChar()
-    local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
 
-    -- RESET DE CÂMERA ANTI-ANIMATION (MoonAnimator/Scripts)
-    camera.CameraType = Enum.CameraType.Scriptable
-    task.wait() -- Pequena pausa para quebrar o vínculo da animação
-    camera.CameraSubject = hum
-    camera.CameraType = Enum.CameraType.Custom
-    camera.CFrame = hrp and CFrame.new(hrp.Position + Vector3.new(0, 10, 0), hrp.Position) or camera.CFrame
-
-    if hum then 
-        hum.WalkSpeed = 40 
-        hum.JumpPower = 60 
-    end
-    
-    if hrp then hrp.Anchored = false end
-
+    -- Reset de atributos e ancoragem
     player:SetAttribute("CanShoot", true)
     player:SetAttribute("IsCasting", false)
+    if hrp then hrp.Anchored = false end
+    if hum then hum.WalkSpeed = 40 hum.JumpPower = 60 end
 
-    -- Para todas as animações de todos os players (incluindo a sua)
+    -- LOOP DE RESET DA CÂMERA (5 VEZES)
+    task.spawn(function()
+        for i = 1, 5 do
+            camera.CameraType = Enum.CameraType.Scriptable
+            task.wait(0.01)
+            camera.CameraSubject = hum
+            camera.CameraType = Enum.CameraType.Custom
+            if hrp then
+                camera.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 10, 12), hrp.Position)
+            end
+            task.wait(0.05) -- Intervalo entre as tentativas de "quebra"
+        end
+    end)
+
+    -- Para todas as animações
     for _, p in pairs(Players:GetPlayers()) do
         if p.Character and p.Character:FindFirstChildOfClass("Humanoid") then
             for _, anim in pairs(p.Character:FindFirstChildOfClass("Humanoid"):GetPlayingAnimationTracks()) do 
-                anim:Stop() 
+                anim:Stop(0) 
             end
         end
     end
