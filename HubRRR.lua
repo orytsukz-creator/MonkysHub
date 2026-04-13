@@ -284,6 +284,40 @@ UserInputService.InputBegan:Connect(function(i, g)
     end 
 end)
 
+-- // LÓGICA PARA ABRIR/FECHAR GUI SEGURANDO O FLOW BUTTON (MOBILE)
+task.spawn(function()
+    local MobileSupport = LocalPlayer.PlayerGui:WaitForChild("MobileSupport", 10)
+    local FlowBtn = MobileSupport and MobileSupport:WaitForChild("Frame", 5):WaitForChild("FlowButton", 5)
+    
+    if not FlowBtn then 
+        warn("FlowButton não encontrado para o atalho da GUI.")
+        return 
+    end
+
+    local pressStartTime = 0
+    local isHolding = false
+
+    FlowBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            pressStartTime = tick()
+            isHolding = true
+        end
+    end)
+
+    FlowBtn.InputEnded:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) and isHolding then
+            isHolding = false
+            local duration = tick() - pressStartTime
+            
+            -- Se segurar por mais de 1 segundo, alterna a GUI
+            if duration >= 1 then
+                Drag.Visible = not Drag.Visible
+            end
+        end
+    end)
+end)
+
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
