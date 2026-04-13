@@ -317,6 +317,9 @@ task.spawn(function()
     end)
 end)
 
+-- BOTÃO DE PÂNICO: Se o script rodar de novo, ele para o antigo
+local oldRadar = _G.RadarLoop
+if oldRadar then oldRadar:Disconnect() end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -326,17 +329,20 @@ local camera = workspace.CurrentCamera
 -- CONFIGURAÇÕES
 local INDICATOR_SIZE = UDim2.new(0, 40, 0, 40) 
 local RADIUS_SCALE = 0.38 
-local SPREAD_DISTANCE = 50 
+local SPREAD_DISTANCE = 52 
 
--- Cria ou pega a ScreenGui
-local screenGui = player.PlayerGui:FindFirstChild("RadarDefinitivo")
-if screenGui then screenGui:Destroy() end
+-- Limpeza de interface antiga
+if player.PlayerGui:FindFirstChild("RadarMaster") then
+	player.PlayerGui.RadarMaster:Destroy()
+end
 
-screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RadarDefinitivo"
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+screenGui.Name = "RadarMaster"
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 999
-screenGui.Parent = player.PlayerGui
+
+local holder = Instance.new("Folder", screenGui)
+holder.Name = "Icons"
 
 local function getPlayerImage(targetPlayer)
 	local s, c = pcall(function()
@@ -345,14 +351,10 @@ local function getPlayerImage(targetPlayer)
 	return s and c or "rbxassetid://0"
 end
 
--- Função para criar o ícone apenas se ele não existir
-local function getOrCreateIndicator(targetPlayer)
-	local name = "ID_" .. targetPlayer.UserId
-	local existing = screenGui:FindFirstChild(name)
-	if existing then return existing end
-
+local function createIndicator(targetPlayer)
+	local id = "ID_" .. tostring(targetPlayer.UserId)
 	local container = Instance.new("Frame")
-	container.Name = name
+	container.Name = id
 	container.Size = INDICATOR_SIZE
 	container.BackgroundTransparency = 1
 	container.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -363,10 +365,7 @@ local function getOrCreateIndicator(targetPlayer)
 	img.BackgroundTransparency = 1
 	img.ZIndex = 10
 	Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
-	
-	local st = Instance.new("UIStroke", img)
-	st.Thickness = 2
-	st.Color = Color3.fromRGB(255, 255, 255)
+	Instance.new("UIStroke", img).Thickness = 2
 
 	local distLabel = Instance.new("TextLabel", container)
 	distLabel.Name = "Distance"
@@ -380,23 +379,24 @@ local function getOrCreateIndicator(targetPlayer)
 	distLabel.TextSize = 11
 	distLabel.ZIndex = 11
 
-	container.Parent = screenGui
+	container.Parent = holder
 	return container
 end
 
-RunService.RenderStepped:Connect(function()
+-- Salvamos o loop numa variável global para podermos parar ele depois
+_G.RadarLoop = RunService.RenderStepped:Connect(function()
 	local char = player.Character
 	local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
 	
 	if not player.Team or not hrp_me then 
-		screenGui:ClearAllChildren()
+		holder:ClearAllChildren()
 		return 
 	end
 
 	local viewportSize = camera.ViewportSize
 	local center = viewportSize / 2
 	local currentPositions = {}
-	local activeIds = {} -- Lista de quem DEVE estar na tela agora
+	local validIds = {}
 
 	for _, target in ipairs(Players:GetPlayers()) do
 		if target ~= player and target.Team == player.Team then
@@ -404,8 +404,9 @@ RunService.RenderStepped:Connect(function()
 			local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
 			
 			if tHrp then
-				local indicator = getOrCreateIndicator(target)
-				table.insert(activeIds, indicator.Name) -- Marca como ativo
+				local indicatorName = "ID_" .. tostring(target.UserId)
+				local indicator = holder:FindFirstChild(indicatorName) or createIndicator(target)
+				table.insert(validIds, indicatorName)
 
 				local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
 
@@ -418,7 +419,7 @@ RunService.RenderStepped:Connect(function()
 					local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
 					local finalPos = Vector2.new(xBase, yBase)
 
-					-- Anti-Colisão (Spread)
+					-- Spread
 					for _, pos in pairs(currentPositions) do
 						if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
 							local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
@@ -437,9 +438,9 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	-- LIMPEZA FINAL: Remove qualquer ícone que não esteja na lista de ativos
-	for _, child in ipairs(screenGui:GetChildren()) do
-		if child:IsA("Frame") and not table.find(activeIds, child.Name) then
+	-- Limpeza total de quem sumiu
+	for _, child in ipairs(holder:GetChildren()) do
+		if not table.find(validIds, child.Name) then
 			child:Destroy()
 		end
 	end
