@@ -108,22 +108,30 @@ local function realizarChuteAutoGol()
 
     local distancia = (alvoFinal - hrp.Position).Magnitude
     
-    -- Lógica Dinâmica Ajustada:
-    -- Perto (< 50 studs): .07
-    -- Longe (> 200 studs): .23
-    local alturaDinamica = 0.07
-    if distancia > 50 then
-        local progresso = math.clamp((distancia - 50) / 150, 0, 1)
-        alturaDinamica = 0.07 + (progresso * 0.16) -- Máximo de .23
-    end
+    -- LÓGICA DINÂMICA REESCRITA:
+    -- Perto (0 studs): 0.07
+    -- Longe (300 studs): 0.23
+    local alturaMin = 0.07
+    local alturaMax = 0.23
+    local distanciaLimite = 300
+
+    -- Calcula o progresso de 0 a 1 baseado na distância (máximo 300)
+    local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
+    
+    -- Interpolação linear entre 0.07 e 0.23
+    local alturaDinamica = alturaMin + (progresso * (alturaMax - alturaMin))
 
     local direcaoHorizontal = Vector3.new(alvoFinal.X - hrp.Position.X, 0, alvoFinal.Z - hrp.Position.Z).Unit
     local dirBase = Vector3.new(direcaoHorizontal.X, alturaDinamica, direcaoHorizontal.Z).Unit
     
+    -- Matemática de Impulso: 3.5x no horizontal e neutraliza o Y para 1x
     local impulsoBruto = dirBase * 3.5
     local dirImpulso = Vector3.new(impulsoBruto.X, impulsoBruto.Y / 3.5, impulsoBruto.Z)
 
     Shoot:FireServer(230, dirBase, dirImpulso, hrp.Position, true, true)
+    
+    -- Debug opcional no console para você ver a altura aplicada
+    -- print(string.format("Dist: %.1f | Y: %.3f", distancia, alturaDinamica))
 end
 
 -- ==========================================
