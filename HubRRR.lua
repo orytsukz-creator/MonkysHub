@@ -283,3 +283,131 @@ UserInputService.InputBegan:Connect(function(i, g)
         Drag.Visible = not Drag.Visible 
     end 
 end)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- CONFIGURAÇÕES
+local INDICATOR_SIZE = UDim2.new(0, 40, 0, 40) 
+local RADIUS_SCALE = 0.38 
+local SPREAD_DISTANCE = 45 -- Distância mínima em pixels entre um ícone e outro
+
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+screenGui.Name = "RadarOrganizado"
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999
+
+local indicators = {}
+
+local function removeIndicator(plr)
+	if indicators[plr] then indicators[plr]:Destroy() indicators[plr] = nil end
+	local f = screenGui:FindFirstChild("R_" .. plr.Name)
+	if f then f:Destroy() end
+end
+
+local function getPlayerImage(targetPlayer)
+	local s, c = pcall(function()
+		return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+	end)
+	return s and c or "rbxassetid://0"
+end
+
+local function createIndicator(targetPlayer)
+	removeIndicator(targetPlayer)
+	local container = Instance.new("Frame")
+	container.Name = "R_" .. targetPlayer.Name
+	container.Size = INDICATOR_SIZE
+	container.BackgroundTransparency = 1
+	container.AnchorPoint = Vector2.new(0.5, 0.5)
+
+	local img = Instance.new("ImageLabel", container)
+	img.Size = UDim2.new(1, 0, 1, 0)
+	img.Image = getPlayerImage(targetPlayer)
+	img.BackgroundTransparency = 1
+	img.ZIndex = 10
+	Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+	local st = Instance.new("UIStroke", img)
+	st.Thickness = 1.5
+	st.Color = Color3.fromRGB(255, 255, 255)
+
+	local distLabel = Instance.new("TextLabel", container)
+	distLabel.Name = "Distance"
+	distLabel.Size = UDim2.new(1, 40, 0, 15)
+	distLabel.Position = UDim2.new(0.5, 0, 1, 2)
+	distLabel.AnchorPoint = Vector2.new(0.5, 0)
+	distLabel.BackgroundTransparency = 1
+	distLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	distLabel.TextStrokeTransparency = 0.2
+	distLabel.Font = Enum.Font.GothamBold
+	distLabel.TextSize = 11
+	distLabel.ZIndex = 11
+
+	container.Parent = screenGui
+	return container
+end
+
+player:GetPropertyChangedSignal("Team"):Connect(function()
+	for plr, _ in pairs(indicators) do removeIndicator(plr) end
+end)
+Players.PlayerRemoving:Connect(removeIndicator)
+
+RunService.RenderStepped:Connect(function()
+	local char = player.Character
+	local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
+	if not player.Team or not hrp_me then 
+		for plr, _ in pairs(indicators) do removeIndicator(plr) end
+		return 
+	end
+
+	local viewportSize = camera.ViewportSize
+	local center = viewportSize / 2
+	local currentPositions = {} -- Tabela para checar colisões de ícones
+
+	for _, target in ipairs(Players:GetPlayers()) do
+		if target ~= player and target.Team == player.Team then
+			local tChar = target.Character
+			local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+			
+			if tHrp then
+				local indicator = indicators[target] or createIndicator(target)
+				indicators[target] = indicator
+
+				local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
+
+				if not onScreen then
+					local dirX, dirY = screenPos.X - center.X, screenPos.Y - center.Y
+					if screenPos.Z < 0 then dirX, dirY = -dirX, -dirY end
+					local direction = Vector2.new(dirX, dirY).Unit
+					
+					-- Cálculo base da posição
+					local xBase = center.X + (direction.X * viewportSize.Y * RADIUS_SCALE)
+					local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
+					local finalPos = Vector2.new(xBase, yBase)
+
+					-- ANTI-POLUIÇÃO: Verifica se já tem alguém nessa posição
+					for _, pos in pairs(currentPositions) do
+						if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
+							-- Empurra o ícone um pouco para o lado se estiver muito perto de outro
+							local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
+							finalPos = finalPos + offset
+						end
+					end
+					table.insert(currentPositions, finalPos)
+
+					local distance = (hrp_me.Position - tHrp.Position).Magnitude
+					indicator.Distance.Text = math.floor(distance) .. "s"
+					indicator.Position = UDim2.new(0, finalPos.X, 0, finalPos.Y)
+					indicator.Visible = true
+				else
+					indicator.Visible = false
+				end
+			elseif indicators[target] then
+				indicators[target].Visible = false
+			end
+		else
+			removeIndicator(target)
+		end
+	end
+end)
