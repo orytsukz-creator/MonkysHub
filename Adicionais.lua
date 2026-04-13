@@ -88,7 +88,7 @@ local function cancelCutscene()
 end
 
 -- ==========================================
--- AUTO GOL DINÂMICO (LONGE .23 | PERTO .07)
+-- AUTO GOL DINÂMICO (LONGE .23 | PERTO .07) v2
 -- ==========================================
 local function realizarChuteAutoGol()
     local hrp = getHRP()
