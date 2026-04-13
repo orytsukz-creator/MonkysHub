@@ -88,43 +88,33 @@ local function cancelCutscene()
 end
 
 -- ==========================================
--- AUTO GOL DINÂMICO (LONGE .23 | PERTO .07) v2
+-- AUTO GOL (ALTURA FIXA .14 | FOCO NO GOL)
 -- ==========================================
 local function realizarChuteAutoGol()
     local hrp = getHRP()
     if not hrp then return end
 
-    -- SORTEIO LATERAL (Não é altura! É apenas para não bater no poste)
-    -- 0.22 = Canto esquerdo seguro | 0.78 = Canto direito seguro
+    -- Sorteio de Canto (0.25 a 0.75)
+    -- Agora a mira fica um pouco mais longe do poste para garantir o gol
     local sorteio = math.random()
     if sorteio > 0.35 and sorteio < 0.65 then
-        sorteio = (sorteio < 0.5) and 0.22 or 0.78
+        sorteio = (sorteio < 0.5) and 0.25 or 0.75
     end
 
     local alvoFinal
     if player.Team and player.Team.Name == "Red" then
-        alvoFinal = TRAVE_BLUE_L:Lerp(TRAVE_BLUE_R, math.clamp(sorteio, 0.2, 0.8))
+        alvoFinal = TRAVE_BLUE_L:Lerp(TRAVE_BLUE_R, math.clamp(sorteio, 0.25, 0.75))
     else
-        alvoFinal = TRAVE_RED_L:Lerp(TRAVE_RED_R, math.clamp(sorteio, 0.2, 0.8))
+        alvoFinal = TRAVE_RED_L:Lerp(TRAVE_RED_R, math.clamp(sorteio, 0.25, 0.75))
     end
 
-    local distancia = (alvoFinal - hrp.Position).Magnitude
-    
-    -- ALTURA (Y) DINÂMICA - EXATAMENTE COMO VOCÊ QUER:
-    local alturaMin = 0.07
-    local alturaMax = 0.23
-    local distanciaLimite = 400 
-
-    local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
-    local alturaDinamica = alturaMin + (progresso * (alturaMax - alturaMin))
-
-    -- Direção Horizontal
+    -- Direção Horizontal (XZ)
     local direcaoHorizontal = Vector3.new(alvoFinal.X - hrp.Position.X, 0, alvoFinal.Z - hrp.Position.Z).Unit
     
-    -- Direção Base (Aqui entra o seu 0.07 ~ 0.23)
-    local dirBase = Vector3.new(direcaoHorizontal.X, alturaDinamica, direcaoHorizontal.Z).Unit
+    -- ALTURA FIXA SOLICITADA: 0.14
+    local dirBase = Vector3.new(direcaoHorizontal.X, 0.14, direcaoHorizontal.Z).Unit
     
-    -- Impulso 3.5x com Y neutralizado (dividido por 3.5 para não subir demais)
+    -- Impulso: 3.5x horizontal e neutraliza o Y (0.14 / 3.5)
     local impulsoBruto = dirBase * 3.5
     local dirImpulso = Vector3.new(impulsoBruto.X, impulsoBruto.Y / 3.5, impulsoBruto.Z)
 
