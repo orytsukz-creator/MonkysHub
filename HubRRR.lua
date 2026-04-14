@@ -317,7 +317,6 @@ task.spawn(function()
     end)
 end)
 
--- Garante que só um script rode por vez
 if _G.RadarLoop then _G.RadarLoop:Disconnect() end
 
 local Players = game:GetService("Players")
@@ -325,127 +324,126 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- CONFIGURAÇÕES
-local INDICATOR_SIZE = UDim2.new(0, 40, 0, 40) 
-local RADIUS_SCALE = 0.38 
-local SPREAD_DISTANCE = 55 
+-- CONFIGURAÇÕES DE DESIGN
+local INDICATOR_SIZE = UDim2.new(0, 36, 0, 36)
+local RADIUS_SCALE = 0.35
+local SPREAD_DISTANCE = 50 
 
--- Reset total da Interface
-local function fullReset()
-	local old = player.PlayerGui:FindFirstChild("RadarFinal")
-	if old then old:Destroy() end
+-- Limpeza absoluta antes de começar
+local function clearOldUI()
+    local old = player.PlayerGui:FindFirstChild("RadarHUD")
+    if old then old:Destroy() end
 end
-fullReset()
+clearOldUI()
 
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "RadarFinal"
+screenGui.Name = "RadarHUD"
 screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 999
+screenGui.DisplayOrder = 10
 
 local holder = Instance.new("Folder", screenGui)
 holder.Name = "Icons"
 
 local function getPlayerImage(targetPlayer)
-	local s, c = pcall(function()
-		return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-	end)
-	return s and c or "rbxassetid://0"
+    local s, c = pcall(function()
+        return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    end)
+    return s and c or "rbxassetid://0"
 end
 
 local function createIndicator(targetPlayer)
-	local id = tostring(targetPlayer.UserId)
-	local container = Instance.new("Frame")
-	container.Name = "Player_" .. id
-	container.SetAttribute(container, "OwnerID", targetPlayer.UserId) -- Marca o dono real
-	container.Size = INDICATOR_SIZE
-	container.BackgroundTransparency = 1
-	container.AnchorPoint = Vector2.new(0.5, 0.5)
+    local container = Instance.new("Frame")
+    container.Name = "P_" .. targetPlayer.UserId
+    container.Size = INDICATOR_SIZE
+    container.BackgroundTransparency = 1
+    container.AnchorPoint = Vector2.new(0.5, 0.5)
+    container.Visible = false -- Começa invisível para não travar no canto
 
-	local img = Instance.new("ImageLabel", container)
-	img.Size = UDim2.new(1, 0, 1, 0)
-	img.Image = getPlayerImage(targetPlayer)
-	img.BackgroundTransparency = 1
-	img.ZIndex = 10
-	Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
-	Instance.new("UIStroke", img).Thickness = 2
+    local img = Instance.new("ImageLabel", container)
+    img.Size = UDim2.new(1, 0, 1, 0)
+    img.Image = getPlayerImage(targetPlayer)
+    img.BackgroundTransparency = 0.1
+    img.ZIndex = 10
+    Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
+    
+    local stroke = Instance.new("UIStroke", img)
+    stroke.Thickness = 2
+    stroke.Color = Color3.new(1, 1, 1)
 
-	local distLabel = Instance.new("TextLabel", container)
-	distLabel.Name = "Distance"
-	distLabel.Size = UDim2.new(1, 40, 0, 15)
-	distLabel.Position = UDim2.new(0.5, 0, 1, 2)
-	distLabel.AnchorPoint = Vector2.new(0.5, 0)
-	distLabel.BackgroundTransparency = 1
-	distLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	distLabel.TextStrokeTransparency = 0
-	distLabel.Font = Enum.Font.GothamBold
-	distLabel.TextSize = 11
-	distLabel.ZIndex = 11
+    local distLabel = Instance.new("TextLabel", container)
+    distLabel.Name = "Distance"
+    distLabel.Size = UDim2.new(1, 40, 0, 12)
+    distLabel.Position = UDim2.new(0.5, 0, 1, 4)
+    distLabel.AnchorPoint = Vector2.new(0.5, 0)
+    distLabel.BackgroundTransparency = 1
+    distLabel.TextColor3 = Color3.new(1, 1, 1)
+    distLabel.Font = Enum.Font.GothamBold
+    distLabel.TextSize = 10
+    distLabel.ZIndex = 11
 
-	container.Parent = holder
-	return container
+    container.Parent = holder
+    return container
 end
 
 _G.RadarLoop = RunService.RenderStepped:Connect(function()
-	local char = player.Character
-	local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
-	
-	-- Se não tiver time ou você morreu, limpa tudo
-	if not player.Team or not hrp_me then 
-		holder:ClearAllChildren()
-		return 
-	end
+    local char = player.Character
+    local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
+    
+    if not player.Team or not hrp_me then 
+        holder:ClearAllChildren()
+        return 
+    end
 
-	local viewportSize = camera.ViewportSize
-	local center = viewportSize / 2
-	local currentPositions = {}
-	local aliveThisFrame = {} -- Lista de IDs que devem estar vivos
+    local viewportSize = camera.ViewportSize
+    local center = viewportSize / 2
+    local currentPositions = {}
+    local aliveThisFrame = {}
 
-	for _, target in ipairs(Players:GetPlayers()) do
-		if target ~= player and target.Team == player.Team then
-			local tChar = target.Character
-			local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
-			
-			-- Só processa se o jogador estiver realmente no jogo (com corpo)
-			if tHrp then
-				local idStr = "Player_" .. tostring(target.UserId)
-				local indicator = holder:FindFirstChild(idStr) or createIndicator(target)
-				
-				aliveThisFrame[idStr] = true -- Registra que este ícone é válido
+    for _, target in ipairs(Players:GetPlayers()) do
+        if target ~= player and target.Team == player.Team then
+            local tChar = target.Character
+            local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+            
+            if tHrp then
+                local idStr = "P_" .. target.UserId
+                local indicator = holder:FindFirstChild(idStr) or createIndicator(target)
+                aliveThisFrame[idStr] = true
 
-				local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
+                local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
 
-				if not onScreen then
-					local dirX, dirY = screenPos.X - center.X, screenPos.Y - center.Y
-					if screenPos.Z < 0 then dirX, dirY = -dirX, -dirY end
-					local direction = Vector2.new(dirX, dirY).Unit
-					
-					local xBase = center.X + (direction.X * viewportSize.Y * RADIUS_SCALE)
-					local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
-					local finalPos = Vector2.new(xBase, yBase)
+                -- A mágica acontece aqui:
+                if not onScreen then
+                    local dirX, dirY = screenPos.X - center.X, screenPos.Y - center.Y
+                    if screenPos.Z < 0 then dirX, dirY = -dirX, -dirY end
+                    local direction = Vector2.new(dirX, dirY).Unit
+                    
+                    local xBase = center.X + (direction.X * viewportSize.Y * RADIUS_SCALE)
+                    local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
+                    local finalPos = Vector2.new(xBase, yBase)
 
-					-- Anti-colisão
-					for _, pos in pairs(currentPositions) do
-						if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
-							local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
-							finalPos = finalPos + offset
-						end
-					end
-					table.insert(currentPositions, finalPos)
+                    -- Sistema Anti-Bolo
+                    for _, pos in pairs(currentPositions) do
+                        if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
+                            local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
+                            finalPos = finalPos + offset
+                        end
+                    end
+                    table.insert(currentPositions, finalPos)
 
-					indicator.Distance.Text = math.floor((hrp_me.Position - tHrp.Position).Magnitude) .. "s"
-					indicator.Position = UDim2.new(0, finalPos.X, 0, finalPos.Y)
-					indicator.Visible = true
-				else
-					indicator.Visible = false
-				end
-			end
-		end
-	end
+                    indicator.Distance.Text = math.floor((hrp_me.Position - tHrp.Position).Magnitude) .. "m"
+                    indicator.Position = UDim2.new(0, finalPos.X, 0, finalPos.Y)
+                    indicator.Visible = true -- Só fica visível quando o cálculo de posição roda
+                else
+                    indicator.Visible = false
+                end
+            end
+        end
+    end
 
-	-- LIMPEZA DE "CONGELADOS": Deleta qualquer um que não foi validado neste frame
-	for _, obj in ipairs(holder:GetChildren()) do
-		if not aliveThisFrame[obj.Name] then
-			obj:Destroy()
-		end
-	end
+    -- Limpa qualquer "fantasma" que não foi validado nesse frame
+    for _, obj in ipairs(holder:GetChildren()) do
+        if not aliveThisFrame[obj.Name] then
+            obj:Destroy()
+        end
+    end
 end)
