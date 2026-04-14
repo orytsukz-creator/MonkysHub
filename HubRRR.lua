@@ -317,9 +317,8 @@ task.spawn(function()
     end)
 end)
 
--- BOTÃO DE PÂNICO: Se o script rodar de novo, ele para o antigo
-local oldRadar = _G.RadarLoop
-if oldRadar then oldRadar:Disconnect() end
+-- Garante que só um script rode por vez
+if _G.RadarLoop then _G.RadarLoop:Disconnect() end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -329,15 +328,17 @@ local camera = workspace.CurrentCamera
 -- CONFIGURAÇÕES
 local INDICATOR_SIZE = UDim2.new(0, 40, 0, 40) 
 local RADIUS_SCALE = 0.38 
-local SPREAD_DISTANCE = 52 
+local SPREAD_DISTANCE = 55 
 
--- Limpeza de interface antiga
-if player.PlayerGui:FindFirstChild("RadarMaster") then
-	player.PlayerGui.RadarMaster:Destroy()
+-- Reset total da Interface
+local function fullReset()
+	local old = player.PlayerGui:FindFirstChild("RadarFinal")
+	if old then old:Destroy() end
 end
+fullReset()
 
 local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "RadarMaster"
+screenGui.Name = "RadarFinal"
 screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 999
 
@@ -352,9 +353,10 @@ local function getPlayerImage(targetPlayer)
 end
 
 local function createIndicator(targetPlayer)
-	local id = "ID_" .. tostring(targetPlayer.UserId)
+	local id = tostring(targetPlayer.UserId)
 	local container = Instance.new("Frame")
-	container.Name = id
+	container.Name = "Player_" .. id
+	container.SetAttribute(container, "OwnerID", targetPlayer.UserId) -- Marca o dono real
 	container.Size = INDICATOR_SIZE
 	container.BackgroundTransparency = 1
 	container.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -383,11 +385,11 @@ local function createIndicator(targetPlayer)
 	return container
 end
 
--- Salvamos o loop numa variável global para podermos parar ele depois
 _G.RadarLoop = RunService.RenderStepped:Connect(function()
 	local char = player.Character
 	local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
 	
+	-- Se não tiver time ou você morreu, limpa tudo
 	if not player.Team or not hrp_me then 
 		holder:ClearAllChildren()
 		return 
@@ -396,17 +398,19 @@ _G.RadarLoop = RunService.RenderStepped:Connect(function()
 	local viewportSize = camera.ViewportSize
 	local center = viewportSize / 2
 	local currentPositions = {}
-	local validIds = {}
+	local aliveThisFrame = {} -- Lista de IDs que devem estar vivos
 
 	for _, target in ipairs(Players:GetPlayers()) do
 		if target ~= player and target.Team == player.Team then
 			local tChar = target.Character
 			local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
 			
+			-- Só processa se o jogador estiver realmente no jogo (com corpo)
 			if tHrp then
-				local indicatorName = "ID_" .. tostring(target.UserId)
-				local indicator = holder:FindFirstChild(indicatorName) or createIndicator(target)
-				table.insert(validIds, indicatorName)
+				local idStr = "Player_" .. tostring(target.UserId)
+				local indicator = holder:FindFirstChild(idStr) or createIndicator(target)
+				
+				aliveThisFrame[idStr] = true -- Registra que este ícone é válido
 
 				local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
 
@@ -419,7 +423,7 @@ _G.RadarLoop = RunService.RenderStepped:Connect(function()
 					local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
 					local finalPos = Vector2.new(xBase, yBase)
 
-					-- Spread
+					-- Anti-colisão
 					for _, pos in pairs(currentPositions) do
 						if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
 							local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
@@ -438,10 +442,10 @@ _G.RadarLoop = RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	-- Limpeza total de quem sumiu
-	for _, child in ipairs(holder:GetChildren()) do
-		if not table.find(validIds, child.Name) then
-			child:Destroy()
+	-- LIMPEZA DE "CONGELADOS": Deleta qualquer um que não foi validado neste frame
+	for _, obj in ipairs(holder:GetChildren()) do
+		if not aliveThisFrame[obj.Name] then
+			obj:Destroy()
 		end
 	end
 end)
