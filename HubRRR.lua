@@ -408,22 +408,20 @@ local function createIcon(plr,pos,dist)
 	corner.CornerRadius = UDim.new(1,0)
 	corner.Parent = img
 
-	--================================================
-	-- DETECTA BOLA
-	--================================================
+	--========================================
+	-- VERIFICA QUEM ESTÁ COM A BOLA
+	-- workspace.Ball atributo: State
+	--========================================
 
 	local hasBall = false
 
 	local ball = workspace:FindFirstChild("Ball")
 
 	if ball then
-		for _,att in ipairs(ball:GetAttributes()) do end
+		local state = ball:GetAttribute("State")
 
-		for name,value in pairs(ball:GetAttributes()) do
-			if tostring(value) == plr.Name then
-				hasBall = true
-				break
-			end
+		if tostring(state) == plr.Name then
+			hasBall = true
 		end
 	end
 
@@ -433,7 +431,7 @@ local function createIcon(plr,pos,dist)
 	if hasBall then
 		stroke.Color = Color3.fromRGB(0,255,0) -- verde
 	else
-		stroke.Color = Color3.new(0,0,0) -- preto normal
+		stroke.Color = Color3.new(0,0,0) -- preto
 	end
 
 	stroke.Parent = img
