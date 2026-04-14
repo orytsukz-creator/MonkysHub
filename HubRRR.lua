@@ -408,9 +408,34 @@ local function createIcon(plr,pos,dist)
 	corner.CornerRadius = UDim.new(1,0)
 	corner.Parent = img
 
+	--================================================
+	-- DETECTA BOLA
+	--================================================
+
+	local hasBall = false
+
+	local ball = workspace:FindFirstChild("Ball")
+
+	if ball then
+		for _,att in ipairs(ball:GetAttributes()) do end
+
+		for name,value in pairs(ball:GetAttributes()) do
+			if tostring(value) == plr.Name then
+				hasBall = true
+				break
+			end
+		end
+	end
+
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 2
-	stroke.Color = Color3.new(0,0,0)
+
+	if hasBall then
+		stroke.Color = Color3.fromRGB(0,255,0) -- verde
+	else
+		stroke.Color = Color3.new(0,0,0) -- preto normal
+	end
+
 	stroke.Parent = img
 
 	local txt = Instance.new("TextLabel")
