@@ -318,12 +318,16 @@ task.spawn(function()
 end)
 
 --//====================================================
---// RADAR OFFSCREEN DO ZERO (BONITO / RESPONSIVO)
---// MOBILE + PC
+--// TEAM RADAR FINAL FIX
+--// testado / simples / funcionando
 --//====================================================
 
-if _G.CleanRadar then
-	_G.CleanRadar()
+if _G.RadarConnection then
+	_G.RadarConnection:Disconnect()
+end
+
+if _G.RadarUI then
+	_G.RadarUI:Destroy()
 end
 
 local Players = game:GetService("Players")
@@ -331,45 +335,44 @@ local RunService = game:GetService("RunService")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local PG = LP:WaitForChild("PlayerGui")
 
---====================================================
--- CONFIG
---====================================================
-
-local SIZE_SCALE = 0.055      -- tamanho relativo tela
-local MIN_SIZE = 28
-local MAX_SIZE = 42
-
-local RADIUS_SCALE = 0.40     -- distância da borda
-local STACK_DISTANCE = 38
+task.wait(2)
 
 --====================================================
 -- GUI
 --====================================================
 
-local Gui = Instance.new("ScreenGui")
-Gui.Name = "SmartRadar"
-Gui.IgnoreGuiInset = true
-Gui.ResetOnSpawn = false
-Gui.DisplayOrder = 99999
-Gui.Parent = LP:WaitForChild("PlayerGui")
+local GUI = Instance.new("ScreenGui")
+GUI.Name = "RadarUI"
+GUI.ResetOnSpawn = false
+GUI.IgnoreGuiInset = true
+GUI.DisplayOrder = 99999
+GUI.Parent = PG
+
+_G.RadarUI = GUI
 
 local Holder = Instance.new("Folder")
-Holder.Parent = Gui
-
-local Icons = {}
+Holder.Parent = GUI
 
 --====================================================
--- FUNÇÕES
+-- CONFIG
 --====================================================
 
-local function getSize()
-	local vp = Camera.ViewportSize
-	local s = math.floor(math.min(vp.X,vp.Y) * SIZE_SCALE)
-	return math.clamp(s,MIN_SIZE,MAX_SIZE)
-end
+local SIZE = 34
+local BORDER = 50
+
+--====================================================
+-- FUNÇÃO FOTO
+--====================================================
+
+local cache = {}
 
 local function getThumb(plr)
+	if cache[plr.UserId] then
+		return cache[plr.UserId]
+	end
+
 	local ok,img = pcall(function()
 		return Players:GetUserThumbnailAsync(
 			plr.UserId,
@@ -378,25 +381,28 @@ local function getThumb(plr)
 		)
 	end)
 
-	return ok and img or "rbxassetid://0"
+	cache[plr.UserId] = ok and img or "rbxassetid://0"
+	return cache[plr.UserId]
 end
 
-local function makeIcon(plr)
+--====================================================
+-- CRIAR ICONE
+--====================================================
 
-	local size = getSize()
+local function createIcon(plr,pos,dist)
 
-	local root = Instance.new("Frame")
-	root.Name = tostring(plr.UserId)
-	root.Size = UDim2.fromOffset(size,size)
-	root.AnchorPoint = Vector2.new(0.5,0.5)
-	root.BackgroundTransparency = 1
-	root.Parent = Holder
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromOffset(SIZE,SIZE)
+	frame.AnchorPoint = Vector2.new(0.5,0.5)
+	frame.Position = UDim2.fromOffset(pos.X,pos.Y)
+	frame.BackgroundTransparency = 1
+	frame.Parent = Holder
 
 	local img = Instance.new("ImageLabel")
 	img.Size = UDim2.fromScale(1,1)
 	img.BackgroundTransparency = 1
 	img.Image = getThumb(plr)
-	img.Parent = root
+	img.Parent = frame
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1,0)
@@ -404,144 +410,106 @@ local function makeIcon(plr)
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Thickness = 2
-	stroke.Color = Color3.fromRGB(0,0,0)
+	stroke.Color = Color3.new(0,0,0)
 	stroke.Parent = img
 
 	local txt = Instance.new("TextLabel")
-	txt.Name = "Dist"
-	txt.AnchorPoint = Vector2.new(0.5,0)
-	txt.Position = UDim2.new(0.5,0,1,1)
 	txt.Size = UDim2.new(2,0,0,14)
+	txt.Position = UDim2.new(0.5,0,1,0)
+	txt.AnchorPoint = Vector2.new(0.5,0)
 	txt.BackgroundTransparency = 1
 	txt.TextScaled = true
 	txt.Font = Enum.Font.GothamBold
 	txt.TextColor3 = Color3.new(1,1,1)
 	txt.TextStrokeTransparency = 0
-	txt.Text = ""
-	txt.Parent = root
-
-	return root
-end
-
-local function getIcon(plr)
-	local id = plr.UserId
-
-	if not Icons[id] or not Icons[id].Parent then
-		Icons[id] = makeIcon(plr)
-	end
-
-	return Icons[id]
-end
-
-local function removeUnused(valid)
-	for id,obj in pairs(Icons) do
-		if not valid[id] then
-			obj:Destroy()
-			Icons[id] = nil
-		end
-	end
+	txt.Text = tostring(dist).."s"
+	txt.Parent = frame
 end
 
 --====================================================
--- CLEAN
+-- PEGAR POSIÇÃO BORDA
 --====================================================
 
-_G.CleanRadar = function()
-	if _G.RadarLoop then
-		_G.RadarLoop:Disconnect()
+local function getEdge(worldPos)
+
+	local vp = Camera.ViewportSize
+	local center = Vector2.new(vp.X/2,vp.Y/2)
+
+	local p,visible = Camera:WorldToViewportPoint(worldPos)
+
+	if visible and p.Z > 0
+	and p.X >= 0 and p.X <= vp.X
+	and p.Y >= 0 and p.Y <= vp.Y then
+		return nil
 	end
 
-	if Gui then
-		Gui:Destroy()
+	local dir = Vector2.new(
+		p.X-center.X,
+		p.Y-center.Y
+	)
+
+	if p.Z < 0 then
+		dir = -dir
 	end
+
+	if dir.Magnitude == 0 then
+		dir = Vector2.new(0,-1)
+	else
+		dir = dir.Unit
+	end
+
+	local x = math.clamp(
+		center.X + dir.X*(center.X-BORDER),
+		BORDER,
+		vp.X-BORDER
+	)
+
+	local y = math.clamp(
+		center.Y + dir.Y*(center.Y-BORDER),
+		BORDER,
+		vp.Y-BORDER
+	)
+
+	return Vector2.new(x,y)
 end
 
 --====================================================
 -- LOOP
 --====================================================
 
-_G.RadarLoop = RunService.RenderStepped:Connect(function()
+_G.RadarConnection = RunService.RenderStepped:Connect(function()
 
-	local myChar = LP.Character
-	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	local char = LP.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local myTeam = LP.Team
 
-	if not myRoot then return end
+	if not hrp or not myTeam then
+		Holder:ClearAllChildren()
+		return
+	end
 
-	local vp = Camera.ViewportSize
-	local center = Vector2.new(vp.X/2,vp.Y/2)
-
-	local used = {}
-	local spots = {}
+	-- limpa tudo e recria
+	Holder:ClearAllChildren()
 
 	for _,plr in ipairs(Players:GetPlayers()) do
 
-		if plr ~= LP then
+		if plr ~= LP and plr.Team == myTeam then
 
-			local ch = plr.Character
-			local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+			local c = plr.Character
+			local r = c and c:FindFirstChild("HumanoidRootPart")
 
-			if hrp then
+			if r then
+				local pos = getEdge(r.Position)
 
-				local icon = getIcon(plr)
-				used[plr.UserId] = true
-
-				local pos,onScreen = Camera:WorldToViewportPoint(hrp.Position)
-
-				if onScreen and pos.Z > 0 then
-					icon.Visible = false
-				else
-					local dir = Vector2.new(
-						pos.X - center.X,
-						pos.Y - center.Y
+				if pos then
+					local dist = math.floor(
+						(hrp.Position-r.Position).Magnitude
 					)
 
-					if pos.Z < 0 then
-						dir = -dir
-					end
-
-					if dir.Magnitude == 0 then
-						dir = Vector2.new(0,1)
-					else
-						dir = dir.Unit
-					end
-
-					local radius = math.min(vp.X,vp.Y) * RADIUS_SCALE
-
-					local final = center + dir * radius
-
-					-- empilha lateralmente sem duplicar
-					local tries = 0
-					while tries < 8 do
-						local hit = false
-
-						for _,p in pairs(spots) do
-							if (final - p).Magnitude < STACK_DISTANCE then
-								final += Vector2.new(-dir.Y,dir.X) * STACK_DISTANCE
-								hit = true
-								break
-							end
-						end
-
-						if not hit then break end
-						tries += 1
-					end
-
-					table.insert(spots,final)
-
-					local size = getSize()
-					icon.Size = UDim2.fromOffset(size,size)
-
-					icon.Position = UDim2.fromOffset(final.X,final.Y)
-
-					icon.Dist.Text =
-						math.floor((myRoot.Position - hrp.Position).Magnitude) .. "s"
-
-					icon.Visible = true
+					createIcon(plr,pos,dist)
 				end
 			end
 		end
 	end
-
-	removeUnused(used)
 
 end)
