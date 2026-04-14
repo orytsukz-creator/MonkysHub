@@ -317,133 +317,161 @@ task.spawn(function()
     end)
 end)
 
-if _G.RadarLoop then _G.RadarLoop:Disconnect() end
+if _G.RadarLoop then
+	_G.RadarLoop:Disconnect()
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- CONFIGURAÇÕES DE DESIGN
-local INDICATOR_SIZE = UDim2.new(0, 36, 0, 36)
-local RADIUS_SCALE = 0.35
-local SPREAD_DISTANCE = 50 
+local INDICATOR_SIZE = UDim2.new(0,40,0,40)
+local RADIUS_SCALE = 0.38
+local SPREAD_DISTANCE = 55
 
--- Limpeza absoluta antes de começar
-local function clearOldUI()
-    local old = player.PlayerGui:FindFirstChild("RadarHUD")
-    if old then old:Destroy() end
-end
-clearOldUI()
+-- RESET
+local old = player.PlayerGui:FindFirstChild("RadarFinal")
+if old then old:Destroy() end
 
-local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.Name = "RadarHUD"
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "RadarFinal"
 screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 10
+screenGui.DisplayOrder = 999
+screenGui.Parent = player.PlayerGui
 
-local holder = Instance.new("Folder", screenGui)
+local holder = Instance.new("Folder")
 holder.Name = "Icons"
+holder.Parent = screenGui
 
-local function getPlayerImage(targetPlayer)
-    local s, c = pcall(function()
-        return Players:GetUserThumbnailAsync(targetPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    end)
-    return s and c or "rbxassetid://0"
+-- GUARDA OS ICONES
+local indicators = {}
+
+local function getPlayerImage(plr)
+	local ok,img = pcall(function()
+		return Players:GetUserThumbnailAsync(
+			plr.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size100x100
+		)
+	end)
+
+	return ok and img or "rbxassetid://0"
 end
 
-local function createIndicator(targetPlayer)
-    local container = Instance.new("Frame")
-    container.Name = "P_" .. targetPlayer.UserId
-    container.Size = INDICATOR_SIZE
-    container.BackgroundTransparency = 1
-    container.AnchorPoint = Vector2.new(0.5, 0.5)
-    container.Visible = false -- Começa invisível para não travar no canto
+local function createIndicator(target)
+	local frame = Instance.new("Frame")
+	frame.Name = tostring(target.UserId)
+	frame.Size = INDICATOR_SIZE
+	frame.AnchorPoint = Vector2.new(0.5,0.5)
+	frame.BackgroundTransparency = 1
+	frame.Parent = holder
 
-    local img = Instance.new("ImageLabel", container)
-    img.Size = UDim2.new(1, 0, 1, 0)
-    img.Image = getPlayerImage(targetPlayer)
-    img.BackgroundTransparency = 0.1
-    img.ZIndex = 10
-    Instance.new("UICorner", img).CornerRadius = UDim.new(1, 0)
-    
-    local stroke = Instance.new("UIStroke", img)
-    stroke.Thickness = 2
-    stroke.Color = Color3.new(1, 1, 1)
+	local img = Instance.new("ImageLabel")
+	img.Size = UDim2.fromScale(1,1)
+	img.BackgroundTransparency = 1
+	img.Image = getPlayerImage(target)
+	img.Parent = frame
 
-    local distLabel = Instance.new("TextLabel", container)
-    distLabel.Name = "Distance"
-    distLabel.Size = UDim2.new(1, 40, 0, 12)
-    distLabel.Position = UDim2.new(0.5, 0, 1, 4)
-    distLabel.AnchorPoint = Vector2.new(0.5, 0)
-    distLabel.BackgroundTransparency = 1
-    distLabel.TextColor3 = Color3.new(1, 1, 1)
-    distLabel.Font = Enum.Font.GothamBold
-    distLabel.TextSize = 10
-    distLabel.ZIndex = 11
+	Instance.new("UICorner",img).CornerRadius = UDim.new(1,0)
 
-    container.Parent = holder
-    return container
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = img
+
+	local txt = Instance.new("TextLabel")
+	txt.Name = "Distance"
+	txt.Size = UDim2.new(1,40,0,15)
+	txt.Position = UDim2.new(0.5,0,1,2)
+	txt.AnchorPoint = Vector2.new(0.5,0)
+	txt.BackgroundTransparency = 1
+	txt.TextColor3 = Color3.new(1,1,1)
+	txt.TextStrokeTransparency = 0
+	txt.Font = Enum.Font.GothamBold
+	txt.TextSize = 11
+	txt.Parent = frame
+
+	return frame
 end
 
 _G.RadarLoop = RunService.RenderStepped:Connect(function()
-    local char = player.Character
-    local hrp_me = char and char:FindFirstChild("HumanoidRootPart")
-    
-    if not player.Team or not hrp_me then 
-        holder:ClearAllChildren()
-        return 
-    end
 
-    local viewportSize = camera.ViewportSize
-    local center = viewportSize / 2
-    local currentPositions = {}
-    local aliveThisFrame = {}
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
-    for _, target in ipairs(Players:GetPlayers()) do
-        if target ~= player and target.Team == player.Team then
-            local tChar = target.Character
-            local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
-            
-            if tHrp then
-                local idStr = "P_" .. target.UserId
-                local indicator = holder:FindFirstChild(idStr) or createIndicator(target)
-                aliveThisFrame[idStr] = true
+	if not hrp or not player.Team then
+		for _,v in pairs(indicators) do
+			v:Destroy()
+		end
+		table.clear(indicators)
+		return
+	end
 
-                local screenPos, onScreen = camera:WorldToViewportPoint(tHrp.Position)
+	local viewport = camera.ViewportSize
+	local center = viewport / 2
 
-                -- A mágica acontece aqui:
-                if not onScreen then
-                    local dirX, dirY = screenPos.X - center.X, screenPos.Y - center.Y
-                    if screenPos.Z < 0 then dirX, dirY = -dirX, -dirY end
-                    local direction = Vector2.new(dirX, dirY).Unit
-                    
-                    local xBase = center.X + (direction.X * viewportSize.Y * RADIUS_SCALE)
-                    local yBase = center.Y + (direction.Y * viewportSize.Y * RADIUS_SCALE)
-                    local finalPos = Vector2.new(xBase, yBase)
+	local currentPositions = {}
+	local used = {}
 
-                    -- Sistema Anti-Bolo
-                    for _, pos in pairs(currentPositions) do
-                        if (finalPos - pos).Magnitude < SPREAD_DISTANCE then
-                            local offset = Vector2.new(-direction.Y, direction.X) * SPREAD_DISTANCE
-                            finalPos = finalPos + offset
-                        end
-                    end
-                    table.insert(currentPositions, finalPos)
+	for _,target in ipairs(Players:GetPlayers()) do
+		if target ~= player and target.Team == player.Team then
 
-                    indicator.Distance.Text = math.floor((hrp_me.Position - tHrp.Position).Magnitude) .. "m"
-                    indicator.Position = UDim2.new(0, finalPos.X, 0, finalPos.Y)
-                    indicator.Visible = true -- Só fica visível quando o cálculo de posição roda
-                else
-                    indicator.Visible = false
-                end
-            end
-        end
-    end
+			local tch = target.Character
+			local thrp = tch and tch:FindFirstChild("HumanoidRootPart")
 
-    -- Limpa qualquer "fantasma" que não foi validado nesse frame
-    for _, obj in ipairs(holder:GetChildren()) do
-        if not aliveThisFrame[obj.Name] then
-            obj:Destroy()
-        end
-    end
+			if thrp then
+				local id = target.UserId
+
+				if not indicators[id] then
+					indicators[id] = createIndicator(target)
+				end
+
+				local gui = indicators[id]
+				used[id] = true
+
+				local pos,onScreen = camera:WorldToViewportPoint(thrp.Position)
+
+				if not onScreen then
+					local dx = pos.X - center.X
+					local dy = pos.Y - center.Y
+
+					if pos.Z < 0 then
+						dx = -dx
+						dy = -dy
+					end
+
+					local dir = Vector2.new(dx,dy).Unit
+
+					local finalPos = Vector2.new(
+						center.X + dir.X * viewport.Y * RADIUS_SCALE,
+						center.Y + dir.Y * viewport.Y * RADIUS_SCALE
+					)
+
+					for _,p in pairs(currentPositions) do
+						if (finalPos - p).Magnitude < SPREAD_DISTANCE then
+							finalPos += Vector2.new(-dir.Y,dir.X) * SPREAD_DISTANCE
+						end
+					end
+
+					table.insert(currentPositions,finalPos)
+
+					gui.Position = UDim2.new(0,finalPos.X,0,finalPos.Y)
+					gui.Distance.Text = math.floor((hrp.Position-thrp.Position).Magnitude).."s"
+					gui.Visible = true
+				else
+					gui.Visible = false
+				end
+			end
+		end
+	end
+
+	-- remove quem saiu
+	for id,obj in pairs(indicators) do
+		if not used[id] then
+			obj:Destroy()
+			indicators[id] = nil
+		end
+	end
+
 end)
