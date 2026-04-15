@@ -345,4 +345,190 @@ if UIS.TouchEnabled then
 end
 
 task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
+task.spawn(function()
+
+	local Teams = game:GetService("Teams")
+	local RunService = game:GetService("RunService")
+	local player = game.Players.LocalPlayer
+
+	-- limpa antigos
+	pcall(function()
+		if workspace:FindFirstChild("BlueGoalHB") then
+			workspace.BlueGoalHB:Destroy()
+		end
+
+		if workspace:FindFirstChild("RedGoalHB") then
+			workspace.RedGoalHB:Destroy()
+		end
+	end)
+
+	--================================================
+	-- CRIAR HITBOX
+	--================================================
+
+	local function criarHB(nome, p1, p2)
+		local center = (p1 + p2) / 2
+		center = center - Vector3.new(0,8,0)
+
+		local part = Instance.new("Part")
+		part.Name = nome
+		part.Anchored = true
+		part.CanCollide = false
+		part.Transparency = 1
+		part.Size = Vector3.new(
+			math.abs(p2.X - p1.X),
+			120,
+			math.abs(p2.Z - p1.Z)
+		)
+		part.CFrame = CFrame.new(center)
+		part.Parent = workspace
+
+		return part
+	end
+
+	local blueHB = criarHB(
+		"BlueGoalHB",
+		Vector3.new(-2295,-25,907),
+		Vector3.new(-2201,-25,1150)
+	)
+
+	local redHB = criarHB(
+		"RedGoalHB",
+		Vector3.new(-2815,-25,1149),
+		Vector3.new(-2907,-25,907)
+	)
+
+	--================================================
+	-- TIME REAL PELO POSITION
+	--================================================
+
+	local function getRealTeam()
+		local pos = tostring(player:GetAttribute("Position") or "")
+
+		if string.find(pos,"Blue") then
+			return "Blue"
+		elseif string.find(pos,"Red") then
+			return "Red"
+		end
+
+		return nil
+	end
+
+	--================================================
+	-- DENTRO DA BOX
+	--================================================
+
+	local function inside(v, part)
+		local rel = part.CFrame:PointToObjectSpace(v)
+		local half = part.Size / 2
+
+		return math.abs(rel.X) <= half.X
+		and math.abs(rel.Y) <= half.Y
+		and math.abs(rel.Z) <= half.Z
+	end
+
+	--================================================
+	-- ESTADO
+	--================================================
+
+	local changed = false
+	local locked = nil
+
+	--================================================
+	-- LOOP
+	--================================================
+
+	RunService.RenderStepped:Connect(function()
+
+		local cfg = getCfg()
+		if not cfg or not cfg.Player then return end
+
+		------------------------------------------------
+		-- DESATIVADO
+		------------------------------------------------
+		if cfg.Player.SkillOnGkBox ~= true then
+
+			if changed then
+				local real = getRealTeam()
+
+				if real then
+					local t = Teams:FindFirstChild(real)
+					if t then
+						player.Team = t
+					end
+				end
+
+				changed = false
+				locked = nil
+			end
+
+			return
+		end
+
+		------------------------------------------------
+		-- ATIVADO
+		------------------------------------------------
+
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+
+		local real = getRealTeam()
+		if not real then return end
+
+		local pos = hrp.Position
+
+		local inBlue = inside(pos, blueHB)
+		local inRed = inside(pos, redHB)
+
+		------------------------------------------------
+		-- JÁ TROCADO
+		------------------------------------------------
+
+		if changed then
+			if locked and not inside(pos, locked) then
+
+				local t = Teams:FindFirstChild(real)
+				if t then
+					player.Team = t
+				end
+
+				changed = false
+				locked = nil
+			end
+
+			return
+		end
+
+		------------------------------------------------
+		-- BLUE ENTROU NO PRÓPRIO GOL
+		------------------------------------------------
+
+		if real == "Blue" and inBlue then
+			local enemy = Teams:FindFirstChild("Red")
+
+			if enemy then
+				player.Team = enemy
+				changed = true
+				locked = blueHB
+			end
+
+		------------------------------------------------
+		-- RED ENTROU NO PRÓPRIO GOL
+		------------------------------------------------
+
+		elseif real == "Red" and inRed then
+			local enemy = Teams:FindFirstChild("Blue")
+
+			if enemy then
+				player.Team = enemy
+				changed = true
+				locked = redHB
+			end
+		end
+
+	end)
+
+end)
+
 print(">> Script Atualizado: Y (.07 a .23) ✅")
