@@ -204,7 +204,7 @@ local function oldAutoGoal()
 
         hrp.CFrame = CFrame.new(
             ball.Position +
-            (ball.AssemblyLinearVelocity * 0.145) +
+            (ball.AssemblyLinearVelocity * 0.24) +
             Vector3.new(0,2,0)
         )
 
