@@ -9,12 +9,28 @@ local ConfigFile = "RRR_Settings.json"
 -- // 1. CONFIGURAÇÕES INICIAIS (ORDEM CRITICA)
 getgenv().RRR_Config = {
     Misc = {
-        AutoGoal = {Enabled = false, Key = "G"},
-        AutoSteal = {Enabled = false, Key = "F"},
-        PowerShot = {Enabled = false, Power = "230", Effect = false, Effect2 = false, HoldTime = "0.47"}
+        AutoGoal = {
+			Enabled = false, 
+			Key = "G",
+			Type = "New"
+		},
+        AutoSteal = {
+			Enabled = false,
+			Key = "F"
+		},
+        PowerShot = {
+			Enabled = false,
+			Power = "230",
+			Effect = false,
+			Effect2 = false,
+			HoldTime = "0.47"
+		}
     },
     Player = {
-        CancelCutscene = {Enabled = false, Key = "C"},
+        CancelCutscene = {
+			Enabled = false,
+			Key = "C"
+		},
         FakeFlow = false,
         FakeMetavision = false
     }
@@ -153,16 +169,67 @@ local function AddCheat(parent, text, category, configKey, hasBind)
     label.BackgroundTransparency = 1; label.TextXAlignment = Enum.TextXAlignment.Left; label.TextSize = 18; label.Parent = frame
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 70, 0.7, 0); btn.Position = UDim2.new(0.82, 0, 0.15, 0); btn.TextScaled = true
+    btn.Size = UDim2.new(0.16,0,0.62,0); btn.Position = UDim2.new(0.81,0,0.18,0); btn.TextScaled = true
     btn.TextColor3 = Color3.fromRGB(255, 255, 255); btn.Parent = frame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
 
     if hasBind then
         local bBtn = Instance.new("TextButton")
-        bBtn.Size = UDim2.new(0, 75, 0, 25); bBtn.Position = UDim2.new(0.53, 0, 0.22, 0)
+        bBtn.Size = UDim2.new(0.18,0,0.55,0); bBtn.Position = UDim2.new(0.58,0,0.22,0)
         bBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20); bBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         bBtn.Text = tostring(getgenv().RRR_Config[category][configKey].Key):gsub("Button", "")
         bBtn.Parent = frame; Instance.new("UICorner", bBtn)
+
+if category == "Misc" and configKey == "AutoGoal" then
+
+    -- KEYBIND
+    bBtn.Size = UDim2.new(0.16,0,0.55,0)
+    bBtn.Position = UDim2.new(0.50,0,0.22,0)
+
+    -- TYPE
+    local typeBtn = Instance.new("TextButton")
+    typeBtn.Size = UDim2.new(0.16,0,0.55,0)
+    typeBtn.Position = UDim2.new(0.68,0,0.22,0)
+    typeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    typeBtn.TextScaled = true
+    typeBtn.Parent = frame
+    Instance.new("UICorner", typeBtn)
+
+    -- ON OFF
+    btn.Size = UDim2.new(0.14,0,0.62,0)
+    btn.Position = UDim2.new(0.85,0,0.18,0)
+
+  local function UpdateType()
+    local t = getgenv().RRR_Config.Misc.AutoGoal.Type or "Old"
+
+    typeBtn.Text = t
+
+    -- fundo fixo roxo/azulado da hub
+    typeBtn.BackgroundColor3 = Color3.fromRGB(45,65,110)
+
+    if t == "Old" then
+        -- old = cinza
+        typeBtn.TextColor3 = Color3.fromRGB(170,170,170)
+    else
+        -- new = verde
+        typeBtn.TextColor3 = Color3.fromRGB(0,255,120)
+    end
+end
+    typeBtn.MouseButton1Click:Connect(function()
+        local t = getgenv().RRR_Config.Misc.AutoGoal.Type or "Old"
+
+        if t == "Old" then
+            getgenv().RRR_Config.Misc.AutoGoal.Type = "New"
+        else
+            getgenv().RRR_Config.Misc.AutoGoal.Type = "Old"
+        end
+
+        Save()
+        UpdateType()
+    end)
+
+    UpdateType()
+end
 
         bBtn.MouseButton1Click:Connect(function()
             local res = GetBind(bBtn)
