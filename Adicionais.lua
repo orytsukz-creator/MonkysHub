@@ -183,45 +183,48 @@ end
 
 local function oldAutoGoal()
 
-    local cfg = getCfg()
     local ball = getBall()
+    local hrp = getHRP()
 
-    if not ball then
+    if not (ball and hrp) then
         return
     end
 
-    -- dispara seu autoSteal normal
-    task.spawn(autoSteal)
-
-    -- espera pegar a bola
-    local start = tick()
     local pegou = false
+    local start = tick()
 
-    while tick() - start < 2 do
-        ball = getBall()
+    while ball and ball.Parent and tick() - start < 3 do
 
-        if ball then
-            local state = ball:GetAttribute("State")
+        local state = ball:GetAttribute("State")
 
-            if state == "UNTOUCHABLE" or state == player.Name then
-                pegou = true
-                break
-            end
+        -- PEGOU = TP IMEDIATO
+        if state == "UNTOUCHABLE" or state == player.Name then
+            pegou = true
+            break
         end
 
-        task.wait()
+        -- vai na bola
+        hrp.CFrame = CFrame.new(
+            ball.Position +
+            (ball.AssemblyLinearVelocity * 0.12) +
+            Vector3.new(0,2,0)
+        )
+
+        Tackle:FireServer()
+
+        task.wait(0.03)
     end
 
     if not pegou then
         return
     end
 
-    -- pegou = TP NA HORA
+    -- TELEPORTA PRO GOL INIMIGO NA HORA
     tpGolInimigo()
 
     task.wait(1)
 
-    local hrp = getHRP()
+    hrp = getHRP()
     if not hrp then return end
 
     local alvo
