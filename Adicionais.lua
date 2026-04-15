@@ -24,6 +24,9 @@ local TRAVE_RED_R = Vector3.new(-2907, -8, 1047)
 local TRAVE_BLUE_L = Vector3.new(-2201, -8, 1010)
 local TRAVE_BLUE_R = Vector3.new(-2201, -8, 1047)
 
+local POS_CHUTE_RED  = Vector3.new(-2835, -25, 1033)
+local POS_CHUTE_BLUE = Vector3.new(-2260, -25, 1047)
+
 -- Gerenciador de Estado (Anti-Spam)
 local Ativo = { Steal = false, Goal = false, Shot = false }
 
@@ -85,6 +88,23 @@ local function cancelCutscene()
             end
         end
     end
+end
+
+local function tpGolInimigo()
+    local hrp = getHRP()
+    if not hrp then return end
+
+    local destino
+
+    if player.Team and player.Team.Name == "Red" then
+        -- Red chuta no Azul
+        destino = POS_CHUTE_BLUE
+    else
+        -- Blue chuta no Red
+        destino = POS_CHUTE_RED
+    end
+
+    tpSeguro(CFrame.new(destino))
 end
 
 -- ==========================================
@@ -161,11 +181,89 @@ local function autoSteal()
     Ativo.Steal = false
 end
 
+local function oldAutoGoal()
+
+    local cfg = getCfg()
+    local ball = getBall()
+
+    if not ball then
+        return
+    end
+
+    -- dispara seu autoSteal normal
+    task.spawn(autoSteal)
+
+    -- espera pegar a bola
+    local start = tick()
+    local pegou = false
+
+    while tick() - start < 2 do
+        ball = getBall()
+
+        if ball then
+            local state = ball:GetAttribute("State")
+
+            if state == "UNTOUCHABLE" or state == player.Name then
+                pegou = true
+                break
+            end
+        end
+
+        task.wait()
+    end
+
+    if not pegou then
+        return
+    end
+
+    -- pegou = TP NA HORA
+    tpGolInimigo()
+
+    task.wait(1)
+
+    local hrp = getHRP()
+    if not hrp then return end
+
+    local alvo
+
+    if player.Team and player.Team.Name == "Red" then
+        alvo = (TRAVE_BLUE_L + TRAVE_BLUE_R) / 2
+    else
+        alvo = (TRAVE_RED_L + TRAVE_RED_R) / 2
+    end
+
+    local dir = (alvo - hrp.Position).Unit
+    local dirBase = Vector3.new(dir.X, 0.10, dir.Z).Unit
+    local dirImpulso = dirBase * 1.8
+
+    Shoot:FireServer(
+        230,
+        dirBase,
+        dirImpulso,
+        hrp.Position,
+        true,
+        true
+    )
+end
+
+
 local function autoGoal()
     local cfg = getCfg()
-    if cfg.Misc.AutoGoal.Enabled ~= true or Ativo.Goal then return end
+
+    if cfg.Misc.AutoGoal.Enabled ~= true or Ativo.Goal then
+        return
+    end
+
     Ativo.Goal = true
-    realizarChuteAutoGol()
+
+    local mode = cfg.Misc.AutoGoal.Type or "New"
+
+    if mode == "Old" then
+        oldAutoGoal()
+    else -- NEW
+        realizarChuteAutoGol()
+    end
+
     task.wait(0.5)
     Ativo.Goal = false
 end
