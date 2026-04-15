@@ -186,24 +186,22 @@ local function oldAutoGoal()
     local ball = getBall()
     local hrp = getHRP()
 
-    if not (ball and hrp) then
+    if not ball or not hrp then
         return
     end
 
     local pegou = false
     local start = tick()
 
-    while ball and ball.Parent and tick() - start < 3 do
+    while ball.Parent and (tick() - start < 3) do
 
         local state = ball:GetAttribute("State")
 
-        -- PEGOU = TP IMEDIATO
         if state == "UNTOUCHABLE" or state == player.Name then
             pegou = true
             break
         end
 
-        -- vai na bola
         hrp.CFrame = CFrame.new(
             ball.Position +
             (ball.AssemblyLinearVelocity * 0.145) +
@@ -211,7 +209,6 @@ local function oldAutoGoal()
         )
 
         Tackle:FireServer()
-
         task.wait(0.03)
     end
 
@@ -219,18 +216,18 @@ local function oldAutoGoal()
         return
     end
 
-    -- TELEPORTA PRO GOL INIMIGO
+    -- TP pro gol inimigo
     tpGolInimigo()
+    task.wait()
 
     hrp = getHRP()
     if not hrp then return end
 
-    -- ANCORA
+    -- trava
     hrp.Anchored = true
 
     task.wait(1)
 
-    -- REPEGA HRP
     hrp = getHRP()
     if not hrp then return end
 
@@ -243,11 +240,12 @@ local function oldAutoGoal()
     end
 
     local dir = (alvo - hrp.Position).Unit
-    local dirBase = Vector3.new(dir.X, 0.10, dir.Z).Unit
+    local dirBase = Vector3.new(dir.X,0.10,dir.Z).Unit
     local dirImpulso = dirBase * 1.8
 
-    -- DESANCORA ANTES DE CHUTAR
+    -- solta antes do chute
     hrp.Anchored = false
+    task.wait()
 
     Shoot:FireServer(
         230,
@@ -257,6 +255,85 @@ local function oldAutoGoal()
         true,
         true
     )
+end
+
+local function autoGoal()
+    Ativo.Goal = true
+
+    local mode = tostring(getgenv().RRR_Config.Misc.AutoGoal.Type or "New")
+
+    -- OLD MODE
+    if mode == "Old" then
+        local hrp = getHRP()
+        local ball = getBall()
+
+        if hrp and ball then
+            local oldPos = hrp.CFrame
+            local pegou = false
+            local startTime = tick()
+
+            while ball and ball.Parent and tick() - startTime < 1.2 do
+                local state = tostring(ball:GetAttribute("State"))
+
+                if state == "UNTOUCHABLE" or state == player.Name then
+                    pegou = true
+                    break
+                end
+
+                hrp.CFrame = CFrame.new(
+                    ball.Position +
+                    (ball.AssemblyLinearVelocity * 0.12) +
+                    Vector3.new(0,2,0)
+                )
+
+                Tackle:FireServer()
+                task.wait(0.03)
+            end
+
+            if pegou then
+                local tpPos
+
+                if player.Team and player.Team.Name == "Red" then
+                    tpPos = Vector3.new(-2260, -25, 1047)
+                else
+                    tpPos = Vector3.new(-2835, -25, 1033)
+                end
+
+                hrp.CFrame = CFrame.new(tpPos)
+
+                task.wait(1)
+
+                local alvo
+
+                if player.Team and player.Team.Name == "Red" then
+                    alvo = Vector3.new(-2201, -8, 1030)
+                else
+                    alvo = Vector3.new(-2907, -8, 1030)
+                end
+
+                local dir = (alvo - hrp.Position).Unit
+                local dirBase = Vector3.new(dir.X, 0.1, dir.Z).Unit
+                local dirImpulso = dirBase * 3.5
+
+                Shoot:FireServer(
+                    230,
+                    dirBase,
+                    dirImpulso,
+                    hrp.Position,
+                    true,
+                    true
+                )
+            else
+                hrp.CFrame = oldPos
+            end
+        end
+
+    else
+        realizarChuteAutoGol()
+    end
+
+    task.wait(0.5)
+    Ativo.Goal = false
 end
 
 local function performPowerShot()
