@@ -32,7 +32,8 @@ getgenv().RRR_Config = {
 			Key = "C"
 		},
         FakeFlow = false,
-        FakeMetavision = false
+        FakeMetavision = false,
+		SkillOnGkBox = false
     }
 }
 
@@ -324,7 +325,7 @@ AddCheat(MiscPage, "Auto Steal", "Misc", "AutoSteal", true)
 AddCheat(PlayerPage, "Cancel Cutscene", "Player", "CancelCutscene", true)
 AddCheat(PlayerPage, "Fake Flow", "Player", "FakeFlow", false)
 AddCheat(PlayerPage, "Fake Metavision", "Player", "FakeMetavision", false)
-
+AddCheat(PlayerPage, "Skill On Gk Box", "Player", "SkillOnGkBox", false)
 -- // DRAG E TOGGLE (MOBILE COMPATIBLE)
 local dS, sP, dragging
 Drag.InputBegan:Connect(function(i) 
