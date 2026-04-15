@@ -219,12 +219,18 @@ local function oldAutoGoal()
         return
     end
 
-    -- TELEPORTA PRO GOL INIMIGO NA HORA
+    -- TELEPORTA PRO GOL INIMIGO
     tpGolInimigo()
-	hrp = getHRP()
-	hrp.Anchored = true
-	task.wait(1)
 
+    hrp = getHRP()
+    if not hrp then return end
+
+    -- ANCORA
+    hrp.Anchored = true
+
+    task.wait(1)
+
+    -- REPEGA HRP
     hrp = getHRP()
     if not hrp then return end
 
@@ -240,7 +246,9 @@ local function oldAutoGoal()
     local dirBase = Vector3.new(dir.X, 0.10, dir.Z).Unit
     local dirImpulso = dirBase * 1.8
 
-	hrp.Anchored = false
+    -- DESANCORA ANTES DE CHUTAR
+    hrp.Anchored = false
+
     Shoot:FireServer(
         230,
         dirBase,
@@ -249,28 +257,6 @@ local function oldAutoGoal()
         true,
         true
     )
-end
-
-
-local function autoGoal()
-    local cfg = getCfg()
-
-    if cfg.Misc.AutoGoal.Enabled ~= true or Ativo.Goal then
-        return
-    end
-
-    Ativo.Goal = true
-
-    local mode = cfg.Misc.AutoGoal.Type or "New"
-
-    if mode == "Old" then
-        oldAutoGoal()
-    else -- NEW
-        realizarChuteAutoGol()
-    end
-
-    task.wait(0.5)
-    Ativo.Goal = false
 end
 
 local function performPowerShot()
