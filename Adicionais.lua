@@ -132,8 +132,8 @@ local function realizarChuteAutoGol()
     
     -- LÓGICA DINÂMICA (LIMITES: 0.07 - 0.15)
     local alturaMin = 0.07 -- Perto
-    local alturaMax = 0.21 -- Longe (400 studs)
-    local distanciaLimite = 600
+    local alturaMax = 0.3 -- Longe (400 studs)
+    local distanciaLimite = 800
 
     local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
     local alturaDinamica = alturaMin + (progresso * (alturaMax - alturaMin))
