@@ -90,68 +90,93 @@ local function cancelCutscene()
     end
 end
 
+local function getRealTeam()
+    local pos = tostring(player:GetAttribute("Position") or "")
+
+    if string.find(pos, "Blue") then
+        return "Blue"
+    elseif string.find(pos, "Red") then
+        return "Red"
+    end
+
+    -- fallback
+    if player.Team then
+        return player.Team.Name
+    end
+
+    return "Blue"
+end
+
+--=========================================
+-- TP GOL INIMIGO (ARRUMADO)
+--=========================================
 local function tpGolInimigo()
     local hrp = getHRP()
     if not hrp then return end
 
+    local realTeam = getRealTeam()
     local destino
 
-    if player.Team and player.Team.Name == "Red" then
-        -- Red chuta no Azul
+    if realTeam == "Red" then
         destino = POS_CHUTE_BLUE
     else
-        -- Blue chuta no Red
         destino = POS_CHUTE_RED
     end
 
     tpSeguro(CFrame.new(destino))
 end
 
--- ==========================================
--- AUTO GOL DINÂMICO (LONGE .15 | PERTO .07)
--- ==========================================
+--=========================================
+-- AUTO GOL NEW (ARRUMADO)
+--=========================================
 local function realizarChuteAutoGol()
     local hrp = getHRP()
     if not hrp then return end
 
-    -- Sorteio de Canto: 0.22 (Esquerda) e 0.78 (Direita)
-    -- Ajustado para evitar o poste em distâncias longas
+    local realTeam = getRealTeam()
+
     local sorteio = math.random()
     if sorteio > 0.35 and sorteio < 0.65 then
         sorteio = (sorteio < 0.5) and 0.22 or 0.78
     end
 
     local alvoFinal
-    if player.Team and player.Team.Name == "Red" then
-        alvoFinal = TRAVE_BLUE_L:Lerp(TRAVE_BLUE_R, math.clamp(sorteio, 0.22, 0.78))
+
+    if realTeam == "Red" then
+        alvoFinal = TRAVE_BLUE_L:Lerp(TRAVE_BLUE_R, math.clamp(sorteio,0.22,0.78))
     else
-        alvoFinal = TRAVE_RED_L:Lerp(TRAVE_RED_R, math.clamp(sorteio, 0.22, 0.78))
+        alvoFinal = TRAVE_RED_L:Lerp(TRAVE_RED_R, math.clamp(sorteio,0.22,0.78))
     end
 
     local distancia = (alvoFinal - hrp.Position).Magnitude
-    
-    -- LÓGICA DINÂMICA (LIMITES: 0.07 - 0.15)
-    local alturaMin = 0.07 -- Perto
-    local alturaMax = 0.3 -- Longe (400 studs)
+
+    local alturaMin = 0.07
+    local alturaMax = 0.30
     local distanciaLimite = 950
 
     local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
     local alturaDinamica = alturaMin + (progresso * (alturaMax - alturaMin))
 
-    -- Direção Horizontal
-    local direcaoHorizontal = Vector3.new(alvoFinal.X - hrp.Position.X, 0, alvoFinal.Z - hrp.Position.Z).Unit
-    
-    -- Direção Base com o Y dinâmico aplicado
-    local dirBase = Vector3.new(direcaoHorizontal.X, alturaDinamica, direcaoHorizontal.Z).Unit
-    
-    -- Impulso: 3.5x no Horizontal e Y neutralizado (dividido por 3.5)
-    local impulsoBruto = dirBase * 3.5
-    local dirImpulso = Vector3.new(impulsoBruto.X, impulsoBruto.Y / 3.5, impulsoBruto.Z)
+    local horizontal = Vector3.new(
+        alvoFinal.X - hrp.Position.X,
+        0,
+        alvoFinal.Z - hrp.Position.Z
+    ).Unit
+
+    local dirBase = Vector3.new(
+        horizontal.X,
+        alturaDinamica,
+        horizontal.Z
+    ).Unit
+
+    local bruto = dirBase * 3.5
+    local dirImpulso = Vector3.new(
+        bruto.X,
+        bruto.Y / 3.5,
+        bruto.Z
+    )
 
     Shoot:FireServer(230, dirBase, dirImpulso, hrp.Position, true, true)
-    
-    -- Debug para conferir se a altura está batendo com a distância
-    -- print(string.format("Dist: %.1f | Altura: %.3f", distancia, alturaDinamica))
 end
 
 -- ==========================================
