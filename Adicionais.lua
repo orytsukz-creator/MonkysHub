@@ -151,7 +151,7 @@ local function realizarChuteAutoGol()
     local distancia = (alvoFinal - hrp.Position).Magnitude
 
     local alturaMin = 0.095
-    local alturaMax = 0.5
+    local alturaMax = 0.37
     local distanciaLimite = 1150
 
     local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
