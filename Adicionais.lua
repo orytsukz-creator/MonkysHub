@@ -19,10 +19,10 @@ local function getHRP() return player.Character and player.Character:FindFirstCh
 local function getBall() return workspace:FindFirstChild("Ball") end
 
 -- Traves Fixas
-local TRAVE_RED_L = Vector3.new(-2907, -8, 1010)
-local TRAVE_RED_R = Vector3.new(-2907, -8, 1047)
-local TRAVE_BLUE_L = Vector3.new(-2201, -8, 1010)
-local TRAVE_BLUE_R = Vector3.new(-2201, -8, 1047)
+local TRAVE_RED_L = Vector3.new(-2907, -8, 1022)
+local TRAVE_RED_R = Vector3.new(-2907, -15, 1044)
+local TRAVE_BLUE_L = Vector3.new(-2201, -15, 1010)
+local TRAVE_BLUE_R = Vector3.new(-2201, -15, 1047)
 
 local POS_CHUTE_RED  = Vector3.new(-2835, -25, 1033)
 local POS_CHUTE_BLUE = Vector3.new(-2260, -25, 1047)
@@ -51,6 +51,8 @@ local function updatePlayerAttributes()
     local cfg = getCfg()
     player:SetAttribute("Flow", cfg.Player.FakeFlow)
     player:SetAttribute("Metavision", cfg.Player.FakeMetavision)
+    player:SetAttribute("CanShoot", true)
+    player:SetAttribute("IsCasting", false)
 end
 
 local function cancelCutscene()
@@ -129,34 +131,91 @@ end
 --=========================================
 -- AUTO GOL NEW (ARRUMADO)
 --=========================================
+-- SUBSTITUI SUA FUNÇÃO realizarChuteAutoGol() POR ESSA
+
 local function realizarChuteAutoGol()
     local hrp = getHRP()
+    local ball = getBall()
     if not hrp then return end
 
     local realTeam = getRealTeam()
 
-    local sorteio = math.random()
-    if sorteio > 0.35 and sorteio < 0.65 then
-        sorteio = (sorteio < 0.5) and 0.22 or 0.78
-    end
-
-    local alvoFinal
+    ------------------------------------------------
+    -- GOL ALVO
+    ------------------------------------------------
+    local travaL, travaR
 
     if realTeam == "Red" then
-        alvoFinal = TRAVE_BLUE_L:Lerp(TRAVE_BLUE_R, math.clamp(sorteio,0.22,0.78))
+        travaL = TRAVE_BLUE_L
+        travaR = TRAVE_BLUE_R
     else
-        alvoFinal = TRAVE_RED_L:Lerp(TRAVE_RED_R, math.clamp(sorteio,0.22,0.78))
+        travaL = TRAVE_RED_L
+        travaR = TRAVE_RED_R
     end
 
+    local centroGol = (travaL + travaR) / 2
+
+    ------------------------------------------------
+    -- MOVIMENTO LATERAL REAL
+    -- esquerda = negativo
+    -- direita = positivo
+    ------------------------------------------------
+    local move = hrp.CFrame.RightVector:Dot(hrp.AssemblyLinearVelocity)
+
+    local lateral
+
+    -- indo pra direita = chuta esquerda
+    if move > 1 then
+        lateral = 0.28
+
+    -- indo pra esquerda = chuta direita
+    elseif move < -1 then
+        lateral = 0.72
+
+    else
+        ------------------------------------------------
+        -- PARADO = SISTEMA ORIGINAL
+        ------------------------------------------------
+        local zDiff = hrp.Position.Z - centroGol.Z
+        local larguraGol = math.abs(travaR.Z - travaL.Z)
+
+        lateral = 0.5 - ((zDiff / larguraGol) * 0.70)
+    end
+
+    ------------------------------------------------
+    -- RANDOM
+    ------------------------------------------------
+    lateral += math.random(-5,5) / 100
+    lateral = math.clamp(lateral, 0.25, 0.75)
+
+    local alvoFinal = travaL:Lerp(travaR, lateral)
+
+    ------------------------------------------------
+    -- DISTÂNCIA
+    ------------------------------------------------
     local distancia = (alvoFinal - hrp.Position).Magnitude
+    local tamanhoCampo = math.abs(POS_CHUTE_RED.X - POS_CHUTE_BLUE.X)
+    local progresso = math.clamp(distancia / tamanhoCampo, 0, 1)
 
-    local alturaMin = 0.095
-    local alturaMax = 0.37
-    local distanciaLimite = 1150
+    ------------------------------------------------
+    -- ALTURA ORIGINAL
+    ------------------------------------------------
+    local alturaMin = 0.11
+    local alturaMax = 0.205
 
-    local progresso = math.clamp(distancia / distanciaLimite, 0, 1)
-    local alturaDinamica = alturaMin + (progresso * (alturaMax - alturaMin))
+    local alturaDinamica =
+        alturaMin + (progresso * (alturaMax - alturaMin))
 
+    ------------------------------------------------
+    -- BOLA NO AR
+    ------------------------------------------------
+    if ball and ball.Position.Y > (hrp.Position.Y + 2) then
+        alturaDinamica = 0.04
+    end
+
+    ------------------------------------------------
+    -- DIREÇÃO
+    ------------------------------------------------
     local horizontal = Vector3.new(
         alvoFinal.X - hrp.Position.X,
         0,
@@ -169,14 +228,34 @@ local function realizarChuteAutoGol()
         horizontal.Z
     ).Unit
 
-    local bruto = dirBase * 3.5
+    ------------------------------------------------
+    -- FORÇA ORIGINAL
+    ------------------------------------------------
+    local forca = 3 + (progresso * 0.35)
+
+    if ball and ball.Position.Y > (hrp.Position.Y + 2) then
+        forca = 3
+    end
+
+    local bruto = dirBase * forca
+
     local dirImpulso = Vector3.new(
         bruto.X,
-        bruto.Y / 3.5,
+        bruto.Y / forca,
         bruto.Z
     )
 
-    Shoot:FireServer(230, dirBase, dirImpulso, hrp.Position, true, true)
+    ------------------------------------------------
+    -- CHUTE
+    ------------------------------------------------
+    Shoot:FireServer(
+        230,
+        dirBase,
+        dirImpulso,
+        hrp.Position,
+        true,
+        true
+    )
 end
 
 -- ==========================================
@@ -434,7 +513,7 @@ if UIS.TouchEnabled then
     end)
 end
 
-task.spawn(function() while task.wait(0.5) do updatePlayerAttributes() end end)
+task.spawn(function() while task.wait(0) do updatePlayerAttributes() end end)
 task.spawn(function()
 
 	local Teams = game:GetService("Teams")
@@ -621,4 +700,4 @@ task.spawn(function()
 
 end)
 
-print(">> Script Atualizado: Y (.07 a .23) ✅")
+print(">> R.R.R HUB ATIVA")
