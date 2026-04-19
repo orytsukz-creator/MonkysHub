@@ -1,3 +1,4 @@
+
 -- ==========================================
 -- SERVICES
 -- ==========================================
@@ -231,7 +232,7 @@ local function realizarChuteAutoGol()
     ------------------------------------------------
     -- FORÇA ORIGINAL
     ------------------------------------------------
-    local forca = 3 + (progresso * 0.35)
+    local forca = 2.7 + (progresso * 0.35)
 
     if ball and ball.Position.Y > (hrp.Position.Y + 2) then
         forca = 3
@@ -700,4 +701,4 @@ task.spawn(function()
 
 end)
 
-print(">> R.R.R HUB ATIVA")
+print(">> Script Atualizado: Y (.07 a .23) ✅")
